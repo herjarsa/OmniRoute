@@ -11,7 +11,11 @@ import {
   QODER_DEFAULT_USER_AGENT,
 } from "../config/providerHeaderProfiles.ts";
 import { sanitizeQwenThinkingToolChoice } from "../services/qwenThinking.ts";
-import { buildCosyHeadersForValidation } from "../services/qoderCli.ts";
+import {
+  buildCosyHeadersForValidation,
+  buildQoderCompletionPayload,
+  extractTextFromQoderEnvelope,
+} from "../services/qoderCli.ts";
 
 function getAuthToken(credentials: ProviderCredentials): string {
   if (typeof credentials.apiKey === "string" && credentials.apiKey.trim()) {
@@ -141,22 +145,32 @@ export class QoderExecutor extends BaseExecutor {
         });
 
         if (cosyRes.ok || cosyRes.status === 200) {
-          // Cosy SSE response - read full body and parse
+          if (stream) {
+            // Streaming: pipe the Cosy SSE response body directly.
+            return {
+              response: new Response(cosyRes.body, {
+                status: 200,
+                headers: { "Content-Type": "text/event-stream" },
+              }),
+              url: cosyEndpoint,
+              headers: cosyHeaders,
+              transformedBody: payload,
+            };
+          }
+          // Non-streaming: buffer Cosy SSE and build OpenAI-format JSON
           const rawText = await cosyRes.text();
           const lines = rawText.split("\n").filter(l => l.startsWith("data: "));
           let fullContent = "";
           for (const line of lines) {
             try {
               const jsonData = JSON.parse(line.slice(6));
-              const { extractTextFromQoderEnvelope } = await import("../services/qoderCli.ts");
               const chunkText = extractTextFromQoderEnvelope(jsonData);
               if (chunkText) fullContent += chunkText;
             } catch {
               // skip unparseable chunks
             }
           }
-          const { buildQoderCompletionPayload } = await import("../services/qoderCli.ts");
-          const cosyPayload = buildQoderCompletionPayload({ model: mappedModel || resolvedModel, text: fullContent });
+          const cosyPayload = buildQoderCompletionPayload({ model: mappedModel, text: fullContent });
           return {
             response: new Response(JSON.stringify(cosyPayload), {
               status: 200,
