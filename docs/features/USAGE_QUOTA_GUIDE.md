@@ -1,0 +1,445 @@
+---
+title: "Usage, Quota & Spend Tracking"
+version: 3.8.16
+lastUpdated: 2026-06-08
+---
+
+# Usage, Quota & Spend Tracking
+
+> **TL;DR**: OmniRoute tracks every request's token usage, computes cost, enforces per-API-key quota, and surfaces analytics in the dashboard. This guide explains how it all works.
+
+**Sources:**
+- `open-sse/services/usage.ts` (101KB) — main usage tracking
+- `src/lib/usageAnalytics.ts` (12KB) — aggregation for dashboard
+- `src/lib/db/quotaSnapshots.ts` — historical quota data
+- `src/lib/db/usage*.ts` — multiple usage-related DB modules
+
+---
+
+## Overview
+
+Every request that flows through OmniRoute generates a **usage record** that captures:
+
+- **Identity**: which API key, provider, model, combo
+- **Tokens**: prompt tokens, completion tokens, cached tokens, total
+- **Cost**: USD amount (computed from pricing data)
+- **Timing**: latency, start/end timestamps
+- **Status**: success, error, rate-limited, etc.
+
+These records are aggregated into **analytics**, persisted as **quota snapshots**, and used to enforce **per-key budget limits**.
+
+```
+Request ──▶ chatCore ──▶ usage.record() ──▶ SQLite
+                                  │
+                          ┌───────┼───────┐
+                          ▼       ▼       ▼
+                    analytics  quota   billing
+                    (dashboard) (enforce) (export)
+```
+
+---
+
+## What Gets Recorded
+
+The `usage.ts` service captures a **usage event** for every request:
+
+| Field | Type | Source |
+|-------|------|--------|
+| `id` | string | UUID generated on record |
+| `apiKeyId` | string | The API key that initiated the request |
+| `provider` | string | Provider ID (openai, anthropic, etc.) |
+| `model` | string | Model ID (gpt-5, claude-opus-4-6, etc.) |
+| `comboId` | string? | Combo ID if routed through a combo |
+| `promptTokens` | number | From upstream response |
+| `completionTokens` | number | From upstream response |
+| `cachedTokens` | number | Cache hit tokens (Anthropic prompt caching, etc.) |
+| `totalTokens` | number | prompt + completion |
+| `costUsd` | number | Computed from pricing data |
+| `latencyMs` | number | End-to-end request duration |
+| `status` | enum | `success`, `error`, `rate_limited`, `timeout`, `cancelled` |
+| `errorClass` | string? | Error class if status != success |
+| `timestamp` | string | ISO 8601 UTC |
+| `metadata` | object | Custom plugin-injected data |
+
+### Where Tokens Come From
+
+Tokens are extracted from the upstream provider's response in the **response handler**:
+
+```ts
+// From open-sse/handlers/chatCore.ts
+const response = await providerExecutor.execute(provider, request);
+const usage = response.usage || {
+  prompt_tokens: 0,
+  completion_tokens: 0,
+  cached_tokens: 0,
+};
+```
+
+For providers that don't return usage (some web-cookie providers), OmniRoute **estimates** tokens using a `~4 chars per token` heuristic (see `open-sse/utils/tokenEstimate.ts`).
+
+### Cached Tokens
+
+OmniRoute tracks `cached_tokens` separately from `prompt_tokens` because:
+
+- Anthropic prompt caching charges a reduced rate for cached tokens (10% of normal)
+- Some providers return `cache_read_input_tokens` that should be priced differently
+- Analytics can show the **cache hit rate** = `cached_tokens / prompt_tokens`
+
+---
+
+## Cost Calculation
+
+Costs are computed from **pricing data** synced from LiteLLM (`src/lib/pricingSync.ts`):
+
+| Model | Input $/1M | Output $/1M | Cached $/1M |
+|-------|-----------|-------------|-------------|
+| gpt-5 | $2.50 | $10.00 | — |
+| claude-opus-4-6 | $15.00 | $75.00 | $1.50 |
+| claude-sonnet-4-5 | $3.00 | $15.00 | $0.30 |
+| gemini-2.5-pro | $1.25 | $10.00 | — |
+
+The cost formula (`src/lib/usage/costCalculator.ts`):
+
+```ts
+cost = (prompt_tokens - cached_tokens) * input_price
+     + cached_tokens * cached_price
+     + completion_tokens * output_price
+```
+
+> **Why subtract cached from prompt?** The cached portion is priced separately; charging input price on the whole prompt would over-count.
+
+### Pricing Sync
+
+Pricing data is auto-synced from LiteLLM:
+
+```bash
+# Default: weekly sync
+PRICING_SYNC_CRON=0 6 * * 1  # Monday 6am UTC
+
+# Manual trigger
+curl -X POST http://localhost:20128/api/admin/pricing/sync
+```
+
+For models with no pricing data, OmniRoute falls back to **estimating cost** using average rates (configurable via `PRICING_FALLBACK_INPUT_CENTS` and `PRICING_FALLBACK_OUTPUT_CENTS`).
+
+---
+
+## Date Range Aggregation
+
+The `usageAnalytics.ts` module computes dashboard widgets from raw usage data. It supports 6 time ranges:
+
+| Range | Window | Use case |
+|-------|--------|----------|
+| `1d` | Last 24 hours | Hourly cost spike detection |
+| `7d` | Last 7 days | Weekly review |
+| `30d` | Last 30 days | Monthly billing |
+| `90d` | Last 90 days | Quarterly analysis |
+| `ytd` | Since Jan 1 of current year | Annual budget tracking |
+| `all` | All time | Lifetime stats |
+| `custom` | User-defined start/end | Audits, ad-hoc queries |
+
+### Dashboard Widgets Computed
+
+For any date range, the analytics layer computes:
+
+| Widget | Description |
+|--------|-------------|
+| **Summary cards** | Total requests, total cost, total tokens, success rate |
+| **Daily trend chart** | Cost + tokens per day, stacked by model |
+| **Activity heatmap** | Hour-of-day × day-of-week grid, color = request count |
+| **Model breakdown** | Pie chart of cost by model |
+| **Provider breakdown** | Bar chart of requests by provider |
+| **Top API keys** | Table of top 10 keys by cost |
+| **Error analysis** | Error rate over time, top error classes |
+
+### Programmatic Access
+
+```ts
+import { getUsageAnalytics } from "omniroute/usage/analytics";
+
+const analytics = await getUsageAnalytics({
+  range: "7d",
+  apiKeyId: "key-123",  // optional: filter to one key
+  groupBy: "model",     // optional: "model" | "provider" | "day" | "combo"
+});
+
+console.log(analytics.summary.totalCost);  // $12.34
+console.log(analytics.models[0]);          // { model: "gpt-5", cost: 8.50, requests: 1234 }
+```
+
+---
+
+## Quota Enforcement
+
+Per-API-key quota is enforced in two places:
+
+1. **Soft limit** (`quotaWarnAt`): dashboard warning when usage exceeds threshold
+2. **Hard limit** (`quotaLimit`): request rejected with HTTP 429 when exceeded
+
+### Configuration
+
+```ts
+// Per API key
+await updateApiKey(keyId, {
+  quotaWarnAt: 5_00,    // $5.00 — show warning
+  quotaLimit: 10_00,    // $10.00 — hard stop
+  quotaWindow: "month", // "day" | "week" | "month" | "all"
+});
+```
+
+### Enforcement Flow
+
+```
+Request ──▶ quotaCheck()
+              │
+              ├── Within limit?  ──▶ allow
+              │
+              └── Over limit?  ──▶ 429 Too Many Requests
+                                   with Retry-After header
+```
+
+### Quota Snapshots
+
+`quotaSnapshots` table stores **historical quota state** for trend analysis:
+
+| Field | Description |
+|-------|-------------|
+| `apiKeyId` | The key being tracked |
+| `window` | "day" | "week" | "month" |
+| `used` | Cost used in this window (cents) |
+| `limit` | The limit (cents) |
+| `resetAt` | When the window resets |
+| `createdAt` | When the snapshot was taken |
+
+Snapshots are taken **on every request** that uses > 0 cost, and used to:
+
+- Render the quota progress bar in the dashboard
+- Show 30-day quota trend charts
+- Trigger alerts when usage approaches the limit
+
+---
+
+## REST API
+
+### List Usage Records
+
+```bash
+GET /api/usage?range=7d&limit=100
+GET /api/usage?apiKeyId=key-123&range=30d
+GET /api/usage?provider=openai&range=1d
+```
+
+Response:
+
+```json
+{
+  "records": [
+    {
+      "id": "uuid",
+      "apiKeyId": "key-123",
+      "provider": "openai",
+      "model": "gpt-5",
+      "promptTokens": 1234,
+      "completionTokens": 567,
+      "totalTokens": 1801,
+      "costUsd": 0.0050,
+      "latencyMs": 1234,
+      "status": "success",
+      "timestamp": "2026-06-08T12:00:00Z"
+    }
+  ],
+  "total": 1234,
+  "nextCursor": "..."
+}
+```
+
+### Get Analytics Summary
+
+```bash
+GET /api/usage/analytics?range=7d&groupBy=model
+```
+
+Response:
+
+```json
+{
+  "summary": {
+    "totalCost": 12.34,
+    "totalRequests": 5678,
+    "totalTokens": 12345678,
+    "successRate": 0.987,
+    "avgLatencyMs": 1234
+  },
+  "models": [
+    { "model": "gpt-5", "cost": 8.50, "requests": 1234, "tokens": 4567890 },
+    { "model": "claude-opus-4-6", "cost": 3.84, "requests": 234, "tokens": 234567 }
+  ],
+  "daily": [
+    { "date": "2026-06-01", "cost": 1.50, "requests": 800 },
+    { "date": "2026-06-02", "cost": 2.00, "requests": 1000 }
+  ]
+}
+```
+
+### Export Usage Data
+
+```bash
+# CSV export
+GET /api/usage/export?range=30d&format=csv
+
+# JSON export
+GET /api/usage/export?range=30d&format=json
+```
+
+Returns a downloadable file with all records in the date range.
+
+---
+
+## MCP Tools
+
+Three MCP tools expose usage data to agents (`open-sse/mcp-server/tools/usageTools.ts`):
+
+| Tool | Description |
+|------|-------------|
+| `usage_stats` | Returns summary stats for a date range |
+| `usage_by_model` | Returns cost breakdown by model |
+| `cost_report` | Generates a per-key cost report |
+
+Example agent invocation:
+
+```json
+{
+  "tool": "usage_stats",
+  "args": { "range": "7d", "apiKeyId": "key-123" }
+}
+```
+
+---
+
+## Retention and Cleanup
+
+Usage data grows ~1-10KB per request. At scale, this can be significant.
+
+### Retention Settings
+
+```bash
+# Default: 90 days
+USAGE_RETENTION_DAYS=90
+
+# Aggressive: 30 days
+USAGE_RETENTION_DAYS=30
+
+# Unlimited (not recommended)
+USAGE_RETENTION_DAYS=0
+```
+
+### Cleanup
+
+Old records are cleaned up by `src/lib/db/cleanup.ts`:
+
+- Runs daily at 3am UTC (configurable via `USAGE_CLEANUP_CRON`)
+- Deletes records older than `USAGE_RETENTION_DAYS`
+- Also clears call log artifacts (`${DATA_DIR}/call_logs/`) older than 30 days
+- Run manually: `omniroute usage cleanup --days 30`
+
+### Storage Estimation
+
+| Request rate | 30-day storage | 90-day storage |
+|--------------|----------------|----------------|
+| 100 req/day | ~3MB | ~9MB |
+| 1,000 req/day | ~30MB | ~90MB |
+| 10,000 req/day | ~300MB | ~900MB |
+| 100,000 req/day | ~3GB | ~9GB |
+
+For very high traffic, consider:
+
+- Reducing `USAGE_RETENTION_DAYS`
+- Disabling detailed request payloads (`CALL_LOG_PIPELINE_CAPTURE=false`)
+- Using `aggregated_metrics` instead of raw records (only for analytics)
+
+---
+
+## Cost Optimization Tips
+
+### 1. Use the Right Model
+
+```bash
+# Quick answer — use cheap + fast
+curl -d '{"model":"auto/fast","messages":[...]}'
+
+# Complex task — use quality
+curl -d '{"model":"auto/smart","messages":[...]}'
+```
+
+### 2. Enable Caching
+
+Anthropic prompt caching saves **90% on repeated context**:
+
+```ts
+// The caching is automatic — just include the same large system prompt
+const response = await openai.chat({
+  model: "claude-sonnet-4-5",
+  system: longSystemPrompt,  // Will be cached automatically
+  messages: [{ role: "user", content: "..." }]
+});
+```
+
+### 3. Use Compression
+
+RTK + Caveman compression saves **15-95% on tool-heavy sessions**:
+
+```ts
+const config = {
+  compression: {
+    engine: "rtk",
+    intensity: "aggressive"
+  }
+};
+```
+
+### 4. Set Per-Key Quotas
+
+Always set `quotaLimit` to prevent runaway costs:
+
+```ts
+await updateApiKey(keyId, { quotaLimit: 10_00 });  // $10/month cap
+```
+
+### 5. Audit Top Consumers
+
+```bash
+# Top 10 API keys by cost this month
+GET /api/usage/top-keys?range=30d&limit=10
+```
+
+---
+
+## Troubleshooting
+
+### "Cost is higher than expected"
+
+1. Check `GET /api/usage/analytics?groupBy=model` — find the expensive model
+2. Check `GET /api/usage/top-keys` — find the heavy consumer
+3. Verify pricing data is up to date: `POST /api/admin/pricing/sync`
+
+### "Records missing"
+
+- Check `USAGE_RETENTION_DAYS` — old records are deleted
+- Check for errors in `src/lib/db/usage*.ts` — DB write failures are logged but not surfaced
+- Verify the request actually reached `chatCore` — check combo routing
+
+### "Quota not enforcing"
+
+- Check the key's `quotaLimit` setting
+- Verify `quotaWindow` is set correctly
+- Look for `quotaSnapshots` records — they should be created on every request
+
+---
+
+## See Also
+
+- [DATABASE_GUIDE.md](../ops/DATABASE_GUIDE.md) — Schema for usage tables
+- [ENVIRONMENT.md](../reference/ENVIRONMENT.md#18-pricing-sync) — pricing sync env vars
+- [AUTO-COMBO.md](../routing/AUTO-COMBO.md) — How `auto/fast`, `auto/cheap` reduce cost
+- [API_REFERENCE.md](../reference/API_REFERENCE.md) — Full `/api/usage/*` reference
+- Source: `open-sse/services/usage.ts`, `src/lib/usageAnalytics.ts`, `src/lib/db/usage*.ts`

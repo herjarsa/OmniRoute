@@ -1,0 +1,673 @@
+---
+title: "Monitoring & Observability Guide"
+version: 3.8.16
+lastUpdated: 2026-06-08
+---
+
+# Monitoring & Observability Guide
+
+> **TL;DR**: OmniRoute ships with built-in health monitoring, provider autopi lots, quota tracking, and observability hooks. This guide covers the dashboard, alerts, and troubleshooting.
+
+**Sources:**
+- `src/lib/monitoring/observability.ts` (7K) — observability snapshot
+- `src/lib/monitoring/comboHealthAutopilot.ts` (15K) — combo health autopilot
+- `src/lib/monitoring/providerHealthAutopilot.ts` (25K) — provider autopilot
+- `src/lib/monitoring/providerHealthMatrix.ts` (22K) — provider health matrix
+- `src/lib/localHealthCheck.ts` (9K) — local health check
+- `src/lib/tokenHealthCheck.ts` (22K) — token refresh health
+- `src/lib/proxyHealth.ts` (4K) — proxy health cache (covered in PROXY_GUIDE.md)
+
+---
+
+## Overview
+
+OmniRoute has **3 layers of monitoring**:
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  Layer 1: System Health (server-level)                        │
+│  ├─ localHealthCheck.ts — DB, ports, native deps              │
+│  ├─ db/healthCheck.ts — integrity, FK, orphaned artifacts     │
+│  └─ Dashboard: /dashboard/health                              │
+├──────────────────────────────────────────────────────────────┤
+│  Layer 2: Provider Health (per-provider resilience)            │
+│  ├─ providerHealthAutopilot.ts — circuit breaker, cooldowns   │
+│  ├─ providerHealthMatrix.ts — health scores by provider/model │
+│  └─ Dashboard: /dashboard/providers                           │
+├──────────────────────────────────────────────────────────────┤
+│  Layer 3: Live Observability (runtime snapshots)               │
+│  ├─ observability.ts — circuit breakers, sessions, quota       │
+│  ├─ tokenHealthCheck.ts — OAuth token refresh health          │
+│  └─ MCP tools: observability_snapshot, quota_status            │
+└──────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Dashboard Pages
+
+### `/dashboard/health` (System Health)
+
+The top-level health dashboard shows:
+
+| Section | What it shows |
+|---------|---------------|
+| **Server status** | Uptime, version, port, active connections |
+| **Database** | Connection, integrity, WAL size, recent migrations |
+| **Provider summary** | Active count, healthy count, breaker open count |
+| **Quota monitors** | Active sessions, alerting, exhausted |
+| **Recent errors** | Last 10 errors with stack traces |
+| **Resource usage** | Memory, CPU, heap pressure indicator |
+
+### `/dashboard/providers` (Provider Health)
+
+Per-provider dashboard:
+
+| Column | Description |
+|--------|-------------|
+| Provider | Provider ID + display name |
+| Health | Green/yellow/red status |
+| Circuit | Open/closed/half-open state |
+| Connections | Count of connections, last refresh |
+| Models | Available models, health per model |
+| Cost | Today's cost, 7-day trend |
+| Errors | Last 24h error count, top error class |
+
+Click a provider to see:
+- Recent requests with latency breakdown
+- Per-connection health scores
+- Per-model lockouts
+- Autopilot recommendations
+
+### `/dashboard/quota` (Quota Tracking)
+
+For each API key:
+
+- Current usage vs limit (progress bar)
+- Quota trend (30-day chart)
+- Next reset time
+- Alert history
+
+### `/dashboard/combos` (Combo Health)
+
+Per-combo:
+
+- Strategy + targets
+- Health per target
+- Recent fallback events
+- Success rate (24h, 7d, 30d)
+
+---
+
+## Health Check API
+
+### System Health
+
+```bash
+GET /api/monitoring/health
+```
+
+Response:
+
+```json
+{
+  "status": "healthy",
+  "version": "3.8.16",
+  "uptime": 123456,
+  "checks": {
+    "database": { "status": "pass", "latency_ms": 2 },
+    "writeable": { "status": "pass" },
+    "integrity": { "status": "pass", "result": "ok" },
+    "foreign_keys": { "status": "pass", "violations": 0 },
+    "heap_pressure": { "status": "pass", "usage_mb": 142, "threshold_mb": 512 },
+    "active_sessions": 12,
+    "providers": {
+      "total": 7,
+      "healthy": 6,
+      "degraded": 1,
+      "down": 0
+    }
+  }
+}
+```
+
+### Provider Health
+
+```bash
+GET /api/monitoring/providers
+```
+
+Response:
+
+```json
+{
+  "providers": [
+    {
+      "id": "openai",
+      "health": "healthy",
+      "circuit_state": "closed",
+      "connections": 1,
+      "models": 12,
+      "today_cost": 1.23,
+      "errors_24h": 2
+    }
+  ]
+}
+```
+
+### Provider Detail
+
+```bash
+GET /api/monitoring/providers/openai
+```
+
+Response:
+
+```json
+{
+  "id": "openai",
+  "health": "healthy",
+  "circuit_state": "closed",
+  "circuit_failure_count": 0,
+  "last_circuit_change": "2026-06-08T10:00:00Z",
+  "connections": [
+    {
+      "id": "conn-123",
+      "type": "api_key",
+      "health": "healthy",
+      "last_refresh": "2026-06-08T09:00:00Z",
+      "next_refresh": "2026-06-08T15:00:00Z",
+      "cooldown_until": null
+    }
+  ],
+  "models": [
+    { "id": "gpt-5", "health": "healthy", "lockout_until": null, "error_rate_24h": 0.01 }
+  ],
+  "recent_errors": [
+    { "timestamp": "2026-06-08T08:30:00Z", "class": "rate_limit", "count": 2 }
+  ]
+}
+```
+
+---
+
+## Provider Health Autopilot
+
+The `providerHealthAutopilot.ts` module is a **self-healing system** that:
+
+1. Detects provider issues (circuit open, cooldowns, lockouts, quota warnings)
+2. Generates **recommended actions** to resolve them
+3. Optionally **auto-executes** low-risk actions
+
+### Issue Types Detected
+
+| Issue kind | Severity | Example condition |
+|------------|----------|-------------------|
+| `provider_circuit_open` | critical | Circuit breaker open after 5 failures |
+| `provider_circuit_half_open` | warning | Circuit testing recovery |
+| `connection_cooldown` | warning | Connection in cooldown after 429 |
+| `stale_connection_error` | warning | Last refresh failed 30+ minutes ago |
+| `terminal_connection_error` | critical | OAuth revoked, key invalid |
+| `inactive_connection` | info | Connection disabled in settings |
+| `model_lockout` | warning | Specific model in quarantine |
+| `quota_monitor_warning` | warning | Quota at 80%+ usage |
+
+### Action Types Generated
+
+| Action | Risk | Description |
+|--------|------|-------------|
+| `clear_provider_breaker` | medium | Reset the circuit breaker to closed |
+| `clear_connection_cooldown` | low | Remove cooldown from a connection |
+| `clear_stale_connection_error` | low | Clear stale error flag |
+| `clear_model_lockout` | low | Re-enable a quarantined model |
+| `reactivate_connection` | medium | Re-enable a deactivated connection |
+| `deactivate_connection` | high | Disable a problematic connection |
+
+### API
+
+List current issues:
+
+```bash
+GET /api/monitoring/autopilot/issues
+```
+
+Response:
+
+```json
+{
+  "issues": [
+    {
+      "id": "issue-123",
+      "severity": "warning",
+      "kind": "connection_cooldown",
+      "provider": "openai",
+      "connectionId": "conn-456",
+      "title": "Connection 'OpenAI Production' in cooldown",
+      "description": "Last 429 at 2026-06-08T12:30:00Z, cooldown until 12:35:00Z",
+      "actions": [
+        {
+          "type": "clear_connection_cooldown",
+          "label": "Clear cooldown now",
+          "risk": "low",
+          "requiresConfirmation": false,
+          "target": { "provider": "openai", "connectionId": "conn-456" }
+        }
+      ]
+    }
+  ]
+}
+```
+
+### Autopilot Mode
+
+Three modes control how issues are handled:
+
+```bash
+# Manual (default) — only show recommendations
+AUTOPILOT_MODE=manual
+
+# Confirm — show recommendations, require user click to apply
+AUTOPILOT_MODE=confirm
+
+# Auto — apply low-risk actions automatically
+AUTOPILOT_MODE=auto
+```
+
+When `auto` mode is enabled, the dashboard shows a banner:
+
+> 🤖 **Autopilot Active** — 3 low-risk actions were applied automatically in the last hour.
+
+---
+
+## Combo Health Autopilot
+
+`comboHealthAutopilot.ts` is the **combo-specific** equivalent of the provider autopilot. It:
+
+- Detects unhealthy combos
+- Recommends target reordering
+- Suggests disabling broken targets
+- Auto-removes dead targets after N failures
+
+### Combo Issue Examples
+
+```
+Combo "always-on" (priority strategy)
+├─ Target 1: openai/gpt-5 (healthy)
+├─ Target 2: anthropic/claude-opus-4-6 (⚠️ model lockout until 14:00)
+└─ Target 3: kiro/claude-sonnet-4-5 (healthy)
+
+Recommended action: Reorder — move kiro above anthropic until lockout expires
+```
+
+---
+
+## Quota Monitors
+
+`observability.ts` exposes **per-session quota monitors** for subscription providers (Claude Code, Codex, GitHub Copilot):
+
+```ts
+interface QuotaMonitorSnapshot {
+  sessionId: string;
+  provider: string;
+  accountId: string;
+  status: "starting" | "idle" | "healthy" | "warning" | "exhausted" | "error";
+  lastQuotaPercent: number | null;  // 0-100
+  lastQuotaUsed: number | null;
+  lastQuotaTotal: number | null;
+  lastResetAt: string | null;
+  nextPollAt: string | null;
+  totalPolls: number;
+  totalAlerts: number;
+  consecutiveFailures: number;
+}
+```
+
+### Status Meanings
+
+| Status | When | UI action |
+|--------|------|-----------|
+| `starting` | Initial poll in progress | Spinner |
+| `idle` | No recent activity | Hidden from dashboard |
+| `healthy` | Quota > 50% remaining | Green dot |
+| `warning` | Quota < 50% remaining | Yellow alert |
+| `exhausted` | Quota = 0% | Red block, route to next provider |
+| `error` | Polling failed | Red dot, retry soon |
+
+### API
+
+```bash
+GET /api/monitoring/quota-monitors
+```
+
+Response:
+
+```json
+{
+  "active": 4,
+  "alerting": 1,
+  "exhausted": 0,
+  "errors": 0,
+  "statusCounts": {
+    "starting": 0,
+    "idle": 1,
+    "healthy": 3,
+    "warning": 1,
+    "exhausted": 0,
+    "error": 0
+  },
+  "byProvider": {
+    "claude-code": 1,
+    "codex": 1,
+    "github-copilot": 1,
+    "cursor": 1
+  }
+}
+```
+
+---
+
+## Observability Snapshot
+
+The MCP tool `observability_snapshot` returns a **complete system snapshot** for AI agents:
+
+```json
+{
+  "circuitBreakers": [
+    {
+      "name": "openai",
+      "state": "closed",
+      "failureCount": 0,
+      "lastFailureTime": null,
+      "retryAfterMs": null
+    }
+  ],
+  "sessions": [
+    {
+      "sessionId": "sess-123",
+      "createdAt": 1234567890,
+      "lastActive": 1234567999,
+      "requestCount": 42,
+      "connectionId": "conn-456",
+      "ageMs": 109
+    }
+  ],
+  "quotaMonitors": { /* see above */ },
+  "uptime": 12345,
+  "version": "3.8.16"
+}
+```
+
+Agents use this to make **routing decisions** — for example, "if openai's circuit is open, route to anthropic first".
+
+---
+
+## Token Health Check
+
+OAuth providers (Claude Code, GitHub Copilot, Cursor) need **periodic token refresh**. `tokenHealthCheck.ts` runs a background scheduler:
+
+- **Every 6 hours**: check all OAuth tokens
+- **30 minutes before expiry**: pre-emptive refresh
+- **On 401 response**: immediate refresh + retry
+
+### Token Health Status
+
+```ts
+interface TokenHealth {
+  connectionId: string;
+  provider: string;
+  status: "valid" | "expiring_soon" | "expired" | "refresh_failed";
+  expiresAt: string;
+  lastRefresh: string;
+  nextRefresh: string;
+  consecutiveFailures: number;
+}
+```
+
+### Configuration
+
+```bash
+# Check interval (default: 6h)
+TOKEN_HEALTH_CHECK_INTERVAL_MS=21600000
+
+# Pre-emptive refresh window (default: 30min)
+TOKEN_PREEMPTIVE_REFRESH_MINUTES=30
+
+# Max consecutive failures before alert (default: 3)
+TOKEN_MAX_FAILURES=3
+```
+
+### Token Health API
+
+```bash
+GET /api/monitoring/token-health
+```
+
+Response:
+
+```json
+{
+  "tokens": [
+    {
+      "connectionId": "conn-123",
+      "provider": "claude-code",
+      "status": "valid",
+      "expiresAt": "2026-06-15T00:00:00Z",
+      "nextRefresh": "2026-06-14T23:30:00Z"
+    }
+  ]
+}
+```
+
+---
+
+## Alerting
+
+### Built-in Channels
+
+OmniRoute supports **3 alert channels**:
+
+| Channel | Setup | Use case |
+|---------|-------|----------|
+| Dashboard banner | Always on | In-app notifications |
+| Webhook | Configure URL | Slack, Discord, PagerDuty |
+| Log | Default | For external log aggregation |
+
+### Webhook Configuration
+
+```bash
+# .env
+ALERT_WEBHOOK_URL=https://hooks.slack.com/services/...
+ALERT_WEBHOOK_EVENTS=provider_circuit_open,quota_exhausted,token_refresh_failed
+```
+
+Webhook payload (JSON):
+
+```json
+{
+  "type": "alert",
+  "severity": "critical",
+  "title": "OpenAI circuit breaker opened",
+  "message": "OpenAI provider circuit breaker is now OPEN after 5 consecutive failures. Last error: rate_limit at 2026-06-08T14:30:00Z",
+  "timestamp": "2026-06-08T14:31:00Z",
+  "context": {
+    "provider": "openai",
+    "failure_count": 5,
+    "last_error": "rate_limit",
+    "affected_combos": ["always-on", "coding-default"]
+  }
+}
+```
+
+### Alert Types
+
+| Alert | When | Default severity |
+|-------|------|------------------|
+| `provider_circuit_open` | Circuit opens | critical |
+| `provider_circuit_half_open` | Circuit testing recovery | info |
+| `quota_warning` | Quota at 80%+ | warning |
+| `quota_exhausted` | Quota at 100% | critical |
+| `token_refresh_failed` | 3+ consecutive refresh failures | warning |
+| `token_expired` | Token past expiry | critical |
+| `combo_target_unhealthy` | Combo target in cooldown for 1h+ | warning |
+| `db_integrity_warning` | FK violations > 0 | warning |
+| `heap_pressure` | Heap usage > 80% of threshold | warning |
+
+---
+
+## Performance Metrics
+
+### Tracked Metrics
+
+| Metric | Type | Source |
+|--------|------|--------|
+| `request_count` | counter | `services/usage.ts` |
+| `request_latency_ms` | histogram | `services/usage.ts` |
+| `tokens_consumed` | counter | `services/usage.ts` |
+| `cost_usd` | counter | `services/usage.ts` |
+| `provider_errors` | counter | `services/errorClassifier.ts` |
+| `circuit_state_changes` | counter | `services/resilience.ts` |
+| `cache_hits` | counter | `services/signatureCache.ts` |
+| `compression_savings` | histogram | `services/compression/stats.ts` |
+| `quota_used` | gauge | `services/quotaMonitor.ts` |
+| `memory_used_mb` | gauge | `observability.ts` |
+
+### Latency Percentiles (p50/p95/p99)
+
+The dashboard shows request latency percentiles over time:
+
+```bash
+GET /api/monitoring/latency?range=1h&percentiles=50,95,99
+```
+
+Response:
+
+```json
+{
+  "latency_ms": {
+    "p50": 1234,
+    "p95": 4567,
+    "p99": 8901
+  },
+  "byProvider": {
+    "openai": { "p50": 1200, "p95": 4000, "p99": 8000 },
+    "anthropic": { "p50": 1500, "p95": 5000, "p99": 9000 }
+  }
+}
+```
+
+### Prometheus / OpenTelemetry Export (Phase 2)
+
+Planned for v3.9: native export to Prometheus, OpenTelemetry, Datadog.
+
+For now, scrape `/api/monitoring/*` endpoints with any HTTP-based monitoring system (Prometheus blackbox exporter, Datadog HTTP check, etc.).
+
+---
+
+## Alerting Recipes
+
+### Slack
+
+1. Create Slack incoming webhook
+2. Set `ALERT_WEBHOOK_URL=https://hooks.slack.com/...`
+3. Set `ALERT_WEBHOOK_EVENTS=provider_circuit_open,quota_exhausted`
+
+### Discord
+
+1. Create Discord webhook
+2. Set `ALERT_WEBHOOK_URL=https://discord.com/api/webhooks/...`
+3. Discord accepts the same JSON payload as Slack
+
+### PagerDuty
+
+1. Create PagerDuty Events API v2 integration
+2. Use the webhook URL with the routing_key
+
+### Custom Webhook (JSON)
+
+Any HTTP endpoint that accepts POST with JSON body will work. The payload is documented above.
+
+---
+
+## Dashboard Configuration
+
+### Customize the Health Dashboard
+
+Create a `~/.omniroute/dashboard.json`:
+
+```json
+{
+  "health": {
+    "sections": [
+      "server_status",
+      "database",
+      "providers",
+      "quota_monitors",
+      "recent_errors"
+    ],
+    "refresh_interval_ms": 5000
+  }
+}
+```
+
+### Pin a Provider to the Top
+
+```json
+{
+  "health": {
+    "pinned_providers": ["openai", "anthropic"]
+  }
+}
+```
+
+---
+
+## Troubleshooting
+
+### "Provider says healthy but requests fail"
+
+1. Check the **autopilot issues** — maybe a model is locked out
+2. Look at **recent errors** for the specific error class
+3. Try the **connection test** in the provider card
+4. Check if the provider is **rate-limited at upstream** (not visible locally)
+
+### "Quota says healthy but I see 429s"
+
+- 429 means the provider says you've used your quota
+- OmniRoute's quota tracking may be **stale** — the provider's truth is upstream
+- Run a **manual quota check**: `POST /api/monitoring/quota/refresh`
+
+### "Combo is failing but all targets look healthy"
+
+- Check **combo health** dashboard for target ordering issues
+- Look at **fallback events** — maybe the combo is exhausting too quickly
+- Verify the **strategy** matches your use case (priority vs round-robin vs auto)
+
+### "Database health check is failing"
+
+- Run `sqlite3 ~/.omniroute/storage.sqlite "PRAGMA integrity_check;"`
+- If "ok" — false alarm, the health check is being too strict
+- If anything else — **stop OmniRoute** and follow the [disaster recovery guide](./DATABASE_GUIDE.md#disaster-recovery)
+
+### "Memory heap pressure is critical"
+
+```bash
+# Check current heap
+node -e "console.log(process.memoryUsage())"
+
+# Trigger manual GC (if --expose-gc)
+node --expose-gc -e "global.gc(); console.log(process.memoryUsage())"
+
+# Reduce concurrent requests
+MAX_CONCURRENT_REQUESTS=10 omniroute
+```
+
+---
+
+## See Also
+
+- [USAGE_QUOTA_GUIDE.md](../features/USAGE_QUOTA_GUIDE.md) — usage & cost tracking
+- [DATABASE_GUIDE.md](./DATABASE_GUIDE.md) — DB schema + health
+- [PROXY_GUIDE.md](./PROXY_GUIDE.md) — proxy health (separate cache)
+- [ARCHITECTURE.md](../architecture/ARCHITECTURE.md) — system architecture
+- [RESILIENCE_GUIDE.md](../architecture/RESILIENCE_GUIDE.md) — circuit breaker details
+- Source: `src/lib/monitoring/` (4 files, ~70K LOC)
