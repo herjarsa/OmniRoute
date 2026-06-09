@@ -71,7 +71,7 @@ Response:
 
 ```json
 {
-  "id": "file-abc123",
+  "id": "<file-id>",
   "purpose": "batch",
   "bytes": 4096,
   "filename": "requests.jsonl",
@@ -86,7 +86,7 @@ curl -X POST http://localhost:20128/api/batches \
   -H "Authorization: Bearer $OMNIROUTE_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "inputFileId": "file-abc123",
+    "inputFileId": "<file-id>",
     "endpoint": "/v1/chat/completions",
     "completionWindow": "24h",
     "metadata": {
@@ -100,10 +100,10 @@ Response:
 
 ```json
 {
-  "id": "batch_xyz789",
+  "id": "<batch-id>",
   "object": "batch",
   "endpoint": "/v1/chat/completions",
-  "inputFileId": "file-abc123",
+  "inputFileId": "<file-id>",
   "completionWindow": "24h",
   "status": "validating",
   "outputFileId": null,
@@ -131,7 +131,7 @@ Response:
 ### Poll for Completion
 
 ```bash
-curl http://localhost:20128/api/batches/batch_xyz789 \
+curl http://localhost:20128/api/batches/<batch-id> \
   -H "Authorization: Bearer $OMNIROUTE_KEY"
 ```
 
@@ -141,20 +141,20 @@ When `status` is `completed`, the response includes `outputFileId` and `errorFil
 
 ```bash
 # Successful results
-curl -X GET "http://localhost:20128/api/files/[outputFileId]/content" \
+curl -X GET "http://localhost:20128/api/files/<output-file-id>/content" \
   -H "Authorization: Bearer $OMNIROUTE_KEY" \
   --output results.jsonl
 
 # Failed requests
-curl -X GET "http://localhost:20128/api/files/[errorFileId]/content" \
+curl -X GET "http://localhost:20128/api/files/<error-file-id>/content" \
   -H "Authorization: Bearer $OMNIROUTE_KEY" \
   --output errors.jsonl
+```
 
 **results.jsonl format:**
+{"id":"<batch-id>-req-1","custom_id":"req-1","response":{"status_code":200,"body":{"id":"chatcmpl-...","choices":[...]}},"error":null}
+{"id":"<batch-id>-req-2","custom_id":"req-2","response":{"status_code":429,"body":{"error":"rate_limit"}},"error":{...}}
 
-```json
-{"id":"batch_xyz789-req-1","custom_id":"req-1","response":{"status_code":200,"body":{"id":"chatcmpl-...","choices":[...]}},"error":null}
-{"id":"batch_xyz789-req-2","custom_id":"req-2","response":{"status_code":429,"body":{"error":"rate_limit"}},"error":{...}}
 ```
 
 ### Cost Estimation
@@ -178,7 +178,7 @@ print(f"Standard: ${standard_cost:.2f}, Batch: ${batch_cost:.2f}, Savings: ${sta
 Batches are tracked in usage:
 
 ```bash
-GET /api/usage?batchId=batch_xyz789
+GET /api/usage?batchId=<batch-id>
 ```
 
 The `batchId` field in usage records links the request to the originating batch.
@@ -209,11 +209,11 @@ Webhook payload:
 ```json
 {
   "type": "batch.completed",
-  "batchId": "batch_xyz789",
+  "batchId": "<batch-id>",
   "status": "completed",
   "requestCounts": { "total": 1000, "completed": 998, "failed": 2 },
-  "outputFileId": "file_abc123def456",
-  "errorFileId": "file_xyz789uvw012",
+  "outputFileId": "<output-file-id>",
+  "errorFileId": "<error-file-id>",
   "timestamp": "2026-06-08T13:00:00Z"
 }
 ```
@@ -262,7 +262,7 @@ Response:
 
 ```json
 {
-  "id": "file-abc123",
+  "id": "<file-id>",
   "object": "file",
   "bytes": 4096,
   "createdAt": "2026-06-08T12:00:00Z",
@@ -302,7 +302,7 @@ Response:
 {
   "data": [
     {
-      "id": "file-abc123",
+      "id": "<file-id>",
       "bytes": 4096,
       "filename": "requests.jsonl",
       "purpose": "batch",
@@ -316,7 +316,7 @@ Response:
 ### Download File Content
 
 ```bash
-curl http://localhost:20128/api/files/file-abc123/content \
+curl http://localhost:20128/api/files/<file-id>/content \
   -H "Authorization: Bearer $OMNIROUTE_KEY" \
   --output downloaded.jsonl
 ```
@@ -324,7 +324,7 @@ curl http://localhost:20128/api/files/file-abc123/content \
 ### Delete File
 
 ```bash
-curl -X DELETE http://localhost:20128/api/files/file-abc123 \
+curl -X DELETE http://localhost:20128/api/files/<file-id> \
   -H "Authorization: Bearer $OMNIROUTE_KEY"
 ```
 
@@ -350,7 +350,7 @@ Files are stored in the `files` table:
 
 ```sql
 CREATE TABLE files (
-  id TEXT PRIMARY KEY,             -- "file-abc123"
+  id TEXT PRIMARY KEY,             -- e.g. "file-abc123"
   api_key_id TEXT NOT NULL,         -- owning key
   purpose TEXT NOT NULL,            -- "batch" | "batch_output"
   filename TEXT NOT NULL,           -- original filename

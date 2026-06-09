@@ -12,7 +12,7 @@ lastUpdated: 2026-06-08
 
 **Related:**
 - [API_REFERENCE.md](./API_REFERENCE.md) — public `/v1/*` routes
-- [BACKUP_RESTORE.md](../ops/BACKUP_RESTORE.md) — `/api/admin/backup*` routes
+- [BACKUP_RESTORE.md](../ops/BACKUP_RESTORE.md) — `/api/db-backups` routes
 
 ---
 
@@ -30,7 +30,7 @@ Management routes return `403` if the key lacks the `admin` scope.
 
 ---
 
-## Admin Routes (`/api/admin/*`)
+## Admin & Database Routes
 
 ### Backup & Restore
 
@@ -43,29 +43,39 @@ Management routes return `403` if the key lacks the `admin` scope.
 | POST | `/api/db-backups/import` | Import from JSON |
 | GET | `/api/db-backups/exportAll` | Export all data (unrestricted) |
 
-### Database
+
+### Database Health
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/admin/db/health` | DB integrity + FK + artifact check |
-| GET | `/api/admin/db/table-counts` | Row counts for all tables |
-| POST | `/api/admin/db/vacuum` | Run `VACUUM` to reclaim space |
-| POST | `/api/admin/db/reindex` | Reindex all tables |
+| GET | `/api/db/health` | DB integrity + FK + artifact check |
+
+### Database Settings
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/settings/database` | Database config + stats |
+| POST | `/api/settings/database/refresh-stats` | Refresh DB statistics |
+| POST | `/api/settings/database/vacuum` | Run `VACUUM` to reclaim space |
 
 ### Pricing
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/admin/pricing/status` | Last sync time, model count |
-| POST | `/api/admin/pricing/sync` | Trigger LiteLLM sync |
+| GET | `/api/pricing` | Pricing config |
+| GET | `/api/pricing/defaults` | Default pricing |
+| GET | `/api/pricing/models` | Model pricing |
+| POST | `/api/pricing/sync` | Trigger pricing sync |
 
 ### Cache
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/admin/cache/stats` | Hit/miss/eviction stats |
-| POST | `/api/admin/cache/flush` | Flush all caches |
-| POST | `/api/admin/cache/invalidate` | Invalidate specific key |
+| GET | `/api/settings/cache-config` | Cache config |
+| GET | `/api/settings/cache-metrics` | Cache metrics |
+| GET | `/api/cache/stats` | Hit/miss/eviction by namespace |
+| POST | `/api/cache/flush` | Flush all namespaces |
+| POST | `/api/cache/invalidate` | Invalidate by key pattern |
 
 See [API_REFERENCE.md](./API_REFERENCE.md) for full schema details.
 
@@ -109,51 +119,8 @@ See [API_REFERENCE.md](./API_REFERENCE.md) for full schema details.
 | PATCH | `/api/settings/mcp` | Update config |
 | POST | `/api/settings/mcp/regenerate-token` | New MCP token |
 
-### Other
+See [WEBHOOKS.md](../frameworks/WEBHOOKS.md) for webhook CRUD, delivery logs, and supported events.
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/settings/webhooks` | Webhook config |
-| GET | `/api/settings/cors` | CORS config |
-| GET | `/api/settings/proxy` | Proxy config |
-| GET | `/api/settings/dashboard` | Dashboard layout |
-
----
-
-## Webhook Routes (`/api/webhooks/*`)
-
-### CRUD
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/webhooks` | List webhooks |
-| POST | `/api/webhooks` | Create webhook |
-| GET | `/api/webhooks/[id]` | Get webhook |
-| PATCH | `/api/webhooks/[id]` | Update webhook |
-| DELETE | `/api/webhooks/[id]` | Delete webhook |
-
-### Delivery Logs
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/webhooks/[id]/deliveries` | List delivery attempts |
-| GET | `/api/webhooks/[id]/deliveries/[deliveryId]` | Single delivery detail |
-| POST | `/api/webhooks/[id]/test` | Send test payload |
-| POST | `/api/webhooks/[id]/deliveries/[deliveryId]/retry` | Retry failed delivery |
-
-### Supported Events
-
-| Event | Payload |
-|-------|---------|
-| `request.completed` | Request, response, usage |
-| `request.failed` | Error class, status code |
-| `quota.warning` | API key, percent used |
-| `quota.exhausted` | API key, blocked |
-| `provider.circuit_open` | Provider name |
-| `provider.circuit_closed` | Provider name |
-| `token.refresh_failed` | Connection ID, error |
-
----
 
 ## CLI Tools Routes (`/api/cli-tools/*`)
 
@@ -288,35 +255,6 @@ See [MEMORY.md](../frameworks/MEMORY.md).
 See [PLUGIN_SDK.md](../plugins/PLUGIN_SDK.md) and [PLUGIN_DEVELOPMENT.md](../plugins/PLUGIN_DEVELOPMENT.md).
 
 ---
-
-## Shadow Routing Routes (`/api/shadow/*`)
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/shadow/rules` | List shadow routing rules |
-| POST | `/api/shadow/rules` | Create shadow rule |
-| DELETE | `/api/shadow/rules/[id]` | Delete rule |
-| GET | `/api/shadow/comparisons` | Compare actual vs shadow results |
-| GET | `/api/shadow/comparisons/[id]` | Single comparison |
-
-Shadow routing runs requests against alternative providers to compare behavior without affecting production.
-
----
-
-## Guardrails Routes (`/api/guardrails/*`)
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/guardrails` | List active guardrails |
-| POST | `/api/guardrails/reload` | Hot-reload guardrail config |
-| GET | `/api/guardrails/violations` | Recent violations |
-| GET | `/api/guardrails/violations/[id]` | Violation detail |
-| POST | `/api/guardrails/test` | Test guardrail against text |
-
-See [GUARDRAILS.md](../security/GUARDRAILS.md).
-
----
-
 ## ACP Routes (`/api/acp/*`)
 
 Only **one agent management endpoint** exists:
@@ -363,28 +301,6 @@ See [CLOUD_AGENT.md](../frameworks/CLOUD_AGENT.md).
 
 ---
 
-## Circuit Breaker Routes (`/api/admin/circuit-breaker*`)
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/admin/circuit-breaker` | All breaker states |
-| GET | `/api/admin/circuit-breaker/[name]` | Specific breaker |
-| POST | `/api/admin/circuit-breaker/[name]/reset` | Force reset |
-| POST | `/api/admin/circuit-breaker/reset-all` | Reset all |
-
----
-
-## Rate Limit Routes (`/api/admin/rate-limits*`)
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/admin/rate-limits` | All rate limit configs |
-| GET | `/api/admin/rate-limits/[key]` | Per-key config |
-| PATCH | `/api/admin/rate-limits/[key]` | Update |
-| GET | `/api/admin/rate-limits/violations` | Recent 429s |
-
----
-
 ## Files API (`/api/files/*`)
 
 See [FILES_API.md](./FILES_API.md) (when published).
@@ -420,25 +336,15 @@ See [BATCHES_API.md](./BATCHES_API.md) (when published).
 | GET | `/api/analytics/auto-routing` | Auto-combo scoring distribution |
 | GET | `/api/analytics/compression` | Compression savings |
 | GET | `/api/analytics/diversity` | Provider/model diversity |
-| GET | `/api/analytics/cost` | Cost breakdown |
-| GET | `/api/analytics/cost/forecast` | Cost forecast (next 30 days) |
 
----
 
 ## Monitoring Routes (`/api/monitoring/*`)
-
-See [MONITORING_GUIDE.md](../ops/MONITORING_GUIDE.md) for full details.
 
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/monitoring/health` | System health snapshot |
-| GET | `/api/monitoring/providers` | All provider health |
-| GET | `/api/monitoring/providers/[id]` | Specific provider |
-| GET | `/api/monitoring/quota-monitors` | Quota monitor snapshots |
-| GET | `/api/monitoring/token-health` | OAuth token health |
-| GET | `/api/monitoring/latency` | Latency percentiles |
-| GET | `/api/monitoring/autopilot/issues` | Open autopilot issues |
-| POST | `/api/monitoring/autopilot/issues/[id]/apply` | Apply recommended action |
+
+See [MONITORING_GUIDE.md](../ops/MONITORING_GUIDE.md) for full details.
 
 ---
 
@@ -459,36 +365,10 @@ See [MONITORING_GUIDE.md](../ops/MONITORING_GUIDE.md) for full details.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/compliance/audit` | Audit log entries |
-| GET | `/api/compliance/audit/[id]` | Single entry |
-| GET | `/api/compliance/policies` | Active policies |
-| POST | `/api/compliance/policies/test` | Test a policy |
+| GET | `/api/compliance/audit-log` | Audit log entries |
 
 See [COMPLIANCE.md](../security/COMPLIANCE.md).
 
----
-
-## CLI Token Routes (`/api/cli-token*`)
-
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/cli-token` | Issue CLI token |
-| GET | `/api/cli-token` | List issued tokens |
-| DELETE | `/api/cli-token/[id]` | Revoke token |
-
-See [CLI_TOKEN.md](../security/CLI_TOKEN.md) and [CLI_TOKEN_AUTH.md](../security/CLI_TOKEN_AUTH.md).
-
----
-
-## Route Guard Routes (`/api/route-guard*`)
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/route-guard/tiers` | Tier definitions |
-| GET | `/api/route-guard/rules` | Tier-based rules |
-| POST | `/api/route-guard/test` | Test a route decision |
-
-See [ROUTE_GUARD_TIERS.md](../security/ROUTE_GUARD_TIERS.md).
 
 ---
 

@@ -400,7 +400,7 @@ Each cloud agent has its own credential flow. Credentials are stored **encrypted
 **Configure:**
 
 ```bash
-POST /api/cloud/credentials
+PUT /api/cloud/credentials/update
 {
   "providerId": "devin",
   "apiKey": "devin-..."

@@ -25,8 +25,7 @@ OmniRoute has **3 layers of backup**:
 |-------|---------|----------|-----------|
 | **Auto** (DB snapshots) | Every state-mutating request (throttled to 1/hour) | `${DATA_DIR}/db_backups/db_*.db` | 20 files OR N days |
 | **Manual** (CLI/API) | `omniroute backup create` or `PUT /api/db-backups` | User-specified path | User-controlled |
-| **Export/Import** | `omniroute backup export\|import` or `GET/POST /api/db-backups/{export,import}` | User-specified path | User-controlled |
-
+| **Export/Import** | `GET/POST /api/db-backups/{export,import}` | User-specified path | User-controlled |
 ```
 ┌────────────────────────────────────────────────────────────┐
 │                    Backup Strategy                          │
@@ -38,9 +37,9 @@ OmniRoute has **3 layers of backup**:
 │                                  │                          │
 │                          Retain: 20 files OR N days          │
 │                                  │                          │
-│   Manual trigger ──▶  CLI: omniroute backup export          │
-│   Manual trigger ──▶  API: POST /api/admin/backup          │
-│                          ──▶ JSON file with all data         │
+│   Export/Import  ──▶  API: GET /api/db-backups/export       │
+│   Manual trigger ──▶  CLI: omniroute backup create            │
+│   Manual trigger ──▶  API: PUT /api/db-backups               │
 │                                  │                          │
 │   SQLite hot ──▶  sqlite3 storage.sqlite ".backup"           │
 │                          ──▶ raw SQLite snapshot              │
@@ -77,20 +76,14 @@ This balances safety (backups are recent) with disk usage (max 1 backup/hour).
 ### Backup File Format
 
 Each backup is a **complete SQLite file** (with `-wal` and `-shm` siblings):
-
 ```
 db_backups/
-├── db_2026-06-08T10-00-00.db
-├── db_2026-06-08T10-00-00.db-wal
-├── db_2026-06-08T10-00-00.db-shm
-├── db_2026-06-08T11-00-00.db
-├── db_2026-06-08T11-00-00.db-wal
-├── db_2026-06-08T11-00-00.db-shm
+├── db_2026-06-08T10-00-00_pre-write.sqlite
+├── db_2026-06-08T11-00-00_pre-write.sqlite
 ...
 ```
 
-The timestamp uses ISO 8601 with colons and periods replaced by hyphens (for filesystem compatibility).
-
+The filename format is `db_<ISO-timestamp>_<reason>.sqlite`, where colons (`:`) and periods (`.` in the timestamp) are replaced with hyphens for filesystem compatibility. The `reason` suffix indicates what triggered the backup (e.g., `pre-write`, `pre-migration`).
 ### Cleanup Algorithm
 
 `backup.ts` runs cleanup after each new backup:
@@ -126,54 +119,36 @@ Response:
 
 ## Manual Backups (CLI)
 
-### Export to JSON
+### Create a Backup Snapshot
 
 ```bash
-# Full backup to stdout
-omniroute backup export > backup-$(date +%Y%m%d).json
+# Create a DB snapshot
+omniroute backup create
 
-# To a specific file
-omniroute backup export --output /backups/omniroute.json
-
-# Compress the output
-omniroute backup export | gzip > backup-$(date +%Y%m%d).json.gz
+# With a name
+omniroute backup create --name pre-deploy
 ```
 
-### What's Included
-
-The JSON export contains:
-
-| Section | Content |
-|---------|---------|
-| `version` | OmniRoute version that created the backup |
-| `timestamp` | ISO 8601 export time |
-| `schema` | DB schema snapshot (CREATE TABLE statements) |
-| `tables` | All DB tables as JSON arrays |
-| `settings` | Key-value configuration |
-| `secrets` | Encrypted secret storage (still encrypted) |
-| `call_log_artifacts` | Request payload artifacts (optional) |
-| `plugin_config` | Plugin configuration |
-| `compression_combos` | Compression pipeline configs |
-
-### File Size
-
-Typical backup sizes (no call log artifacts):
-
-| Database state | Approx size |
-|----------------|-------------|
-| Fresh install (no usage) | 1-5 MB |
-| 1k usage records | 5-10 MB |
-| 100k usage records | 50-100 MB |
-| With call log artifacts | +10-50 MB |
-
-### Restore from JSON
+### Restore from Backup
 
 ```bash
-# WARNING: Overwrites the entire DB
-omniroute backup import < backup.json
+# Interactively select and restore a backup
+omniroute backup restore
+
+# Restore a specific backup by ID
+omniroute backup restore db_2026-06-08T10-00-00_pre-write.sqlite
+
+# Skip confirmation prompt
+omniroute backup restore --yes db_2026-06-08T10-00-00_pre-write.sqlite
 ```
 
 > **Stop all clients first** — running clients will have stale data.
+
+### View Backup Status
+
+```bash
+omniroute backup status
+```
 
 ### CLI Reference
 
@@ -185,15 +160,11 @@ omniroute backup --help
 Usage: omniroute backup <command> [options]
 
 Commands:
-  export [--output PATH]  Export full DB state to JSON
-  import <file>            Import and restore from JSON
-  list                     List available auto-backups
-  clean [--days N]         Delete old auto-backups
-  verify <file>            Verify a backup file is valid
-```
-
----
-
+  create               Create a DB snapshot
+  auto                 Enable/configure automatic backups
+  restore [backupId]   Restore from a backup
+  enable               Enable automatic backup schedule
+  disable              Disable automatic backup schedule
 ## Manual Backups (API)
 
 ### Export (JSON)
@@ -235,7 +206,7 @@ Response:
 {
   "backups": [
     {
-      "filename": "db_2026-06-08T11-00-00.db",
+      "filename": "db_2026-06-08T11-00-00_pre-write.sqlite",
       "sizeBytes": 4567890,
       "createdAt": "2026-06-08T11:00:00Z",
       "ageHours": 2.5
@@ -332,8 +303,8 @@ set -euo pipefail
 BACKUP_FILE="/tmp/omniroute-$(date +%Y%m%d).json.gz"
 S3_PATH="s3://my-omniroute-backups/$(date +%Y/%m/%d)/"
 
-# Generate backup
-omniroute backup export | gzip > "$BACKUP_FILE"
+# Generate backup via API
+curl -s -X GET http://localhost:20128/api/db-backups/export -H "Authorization: Bearer $MANAGEMENT_KEY" | gzip > "$BACKUP_FILE"
 
 # Upload
 aws s3 cp "$BACKUP_FILE" "$S3_PATH" --storage-class STANDARD_IA
@@ -351,7 +322,7 @@ echo "Backup uploaded to $S3_PATH"
 aws s3 cp s3://my-omniroute-backups/2026/06/08/omniroute-20260608.json.gz /tmp/
 
 # Restore
-gunzip -c /tmp/omniroute-20260608.json.gz | omniroute backup import
+gunzip -c /tmp/omniroute-20260608.json.gz | curl -s -X POST http://localhost:20128/api/db-backups/import -H "Authorization: Bearer $MANAGEMENT_KEY" -H "Content-Type: application/json" -d @-
 ```
 
 ### S3-Compatible Providers
@@ -372,10 +343,11 @@ JSON exports contain **encrypted** secrets (using the same AES-256-GCM as the DB
 
 ```bash
 # Encrypt with GPG
-omniroute backup export | gzip | gpg --symmetric --cipher-algo AES256 > backup.gpg
+curl -s -X GET http://localhost:20128/api/db-backups/export -H "Authorization: Bearer $MANAGEMENT_KEY" | gzip | gpg --symmetric --cipher-algo AES256 > backup.gpg
 
-# Decrypt
-gpg --decrypt backup.gpg | gunzip | omniroute backup import
+# Decrypt and restore via API
+gpg --decrypt backup.gpg | gunzip | curl -s -X POST http://localhost:20128/api/db-backups/import -H "Authorization: Bearer $MANAGEMENT_KEY" -H "Content-Type: application/json" -d @-
+
 ```
 
 Or use S3 server-side encryption (SSE-S3, SSE-KMS) — the bucket handles encryption.
@@ -397,10 +369,9 @@ TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 BACKUP_DIR="/backups/omniroute/daily"
 S3_BUCKET="s3://my-company-backups/omniroute"
 
-mkdir -p "$BACKUP_DIR"
+# 1. Generate local backup via API
+curl -s -X GET http://localhost:20128/api/db-backups/export -H "Authorization: Bearer $MANAGEMENT_KEY" | gzip > "$BACKUP_DIR/backup-$TIMESTAMP.json.gz"
 
-# 1. Generate local backup
-omniroute backup export | gzip > "$BACKUP_DIR/backup-$TIMESTAMP.json.gz"
 
 # 2. Upload to S3
 aws s3 cp "$BACKUP_DIR/backup-$TIMESTAMP.json.gz" "$S3_BUCKET/daily/" \
@@ -427,22 +398,28 @@ Cron: `0 2 * * * /usr/local/bin/omniroute-daily-backup.sh`
 omniroute stop
 
 # 2. Snapshot the DB
-sqlite3 ~/.omniroute/storage.sqlite ".backup /backups/pre-upgrade.db"
+sqlite3 ~/.omniroute/storage.sqlite ".backup /backups/pre-upgrade.sqlite"
 
-# 3. Export as JSON
-omniroute start  # briefly to allow export
-omniroute backup export > /backups/pre-upgrade.json
+# 3. Compress the snapshot immediately (before restarting)
+gzip /backups/pre-upgrade.sqlite
 
-# 4. Compress and archive
+# 4. Start OmniRoute briefly to allow API export
+omniroute start
+
+# 5. Export as JSON via API
+curl -X GET http://localhost:20128/api/db-backups/export \
+  -H "Authorization: Bearer $MANAGEMENT_KEY" \
+  --output /backups/pre-upgrade.json
+omniroute stop
+
+# 6. Compress and archive the JSON export
 gzip /backups/pre-upgrade.json
-gzip /backups/pre-upgrade.db
 mv /backups/pre-upgrade.json.gz /backups/pre-upgrade-$(date +%Y%m%d).json.gz
-mv /backups/pre-upgrade.db.gz /backups/pre-upgrade-$(date +%Y%m%d).db.gz
+mv /backups/pre-upgrade.sqlite.gz /backups/pre-upgrade-$(date +%Y%m%d).sqlite.gz
 
-# 5. Now safe to upgrade
+# 7. Now safe to upgrade
 npm install -g omniroute@latest
 omniroute start
-```
 
 ### Runbook 3: Restore from Corruption
 
@@ -473,10 +450,11 @@ omniroute start
 ### Runbook 4: Restore to New Machine
 
 Moving OmniRoute to a new host:
-
 ```bash
-# ON OLD MACHINE
-omniroute backup export > /tmp/migration.json
+# ON OLD MACHINE — export via API
+curl -s -X GET http://localhost:20128/api/db-backups/export \
+  -H "Authorization: Bearer $MANAGEMENT_KEY" \
+  --output /tmp/migration.json
 # Copy /tmp/migration.json to new machine (scp, rsync, etc.)
 
 # ON NEW MACHINE (after installing OmniRoute)
@@ -484,8 +462,11 @@ omniroute backup export > /tmp/migration.json
 echo "OMNIROUTE_ENCRYPTION_KEY=..." >> ~/.omniroute/.env
 # (must match the old machine's key!)
 
-# 2. Import
-omniroute backup import < /tmp/migration.json
+# 2. Import via API
+curl -s -X POST http://localhost:20128/api/db-backups/import \
+  -H "Authorization: Bearer $MANAGEMENT_KEY" \
+  -H "Content-Type: application/json" \
+  -d @/tmp/migration.json
 
 # 3. Verify
 omniroute status
@@ -506,7 +487,7 @@ omniroute status
 #!/bin/bash
 LATEST=$(aws s3 ls s3://my-backups/omniroute/hourly/ | sort | tail -1 | awk '{print $4}')
 aws s3 cp "s3://my-backups/omniroute/hourly/$LATEST" /tmp/latest-backup.json.gz
-gunzip -c /tmp/latest-backup.json.gz | omniroute backup import
+gunzip -c /tmp/latest-backup.json.gz | curl -s -X POST http://localhost:20128/api/db-backups/import -H "Authorization: Bearer $MANAGEMENT_KEY" -H "Content-Type: application/json" -d @-
 ```
 
 ---
@@ -617,7 +598,7 @@ echo "OMNIROUTE_ENCRYPTION_KEY=<key>" >> ~/.omniroute/.env
 aws s3 cp s3://my-backups/omniroute/hourly/2026-06-08/backup-110000.json.gz /tmp/
 
 # 4. Import
-gunzip -c /tmp/backup-110000.json.gz | omniroute backup import
+gunzip -c /tmp/backup-110000.json.gz | curl -s -X POST http://localhost:20128/api/db-backups/import -H "Authorization: Bearer $MANAGEMENT_KEY" -H "Content-Type: application/json" -d @-
 
 # 5. Verify
 omniroute status
@@ -697,8 +678,8 @@ ls -la ~/.omniroute/db_backups/
 
 Check the throttling state:
 ```bash
-GET /api/admin/db/backup-status
-# Look at "throttledUntil"
+GET /api/db-backups
+# Look at "throttledUntil" in the response
 ```
 
 If throttled, wait or manually trigger via API.
@@ -709,7 +690,7 @@ The backup was from an older OmniRoute version. Run migrations first:
 ```bash
 omniroute start  # runs migrations
 omniroute stop
-omniroute backup import < backup.json
+curl -s -X POST http://localhost:20128/api/db-backups/import -H "Authorization: Bearer $MANAGEMENT_KEY" -H "Content-Type: application/json" -d @backup.json
 ```
 
 ### "Cannot decrypt secrets"

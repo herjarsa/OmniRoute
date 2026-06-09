@@ -995,21 +995,6 @@ The following variables were added in v3.8.16 (alongside the new plugin, memory,
 | Variable | Default | Source | Purpose |
 |----------|---------|--------|---------|
 | `PLUGIN_DEV_MODE` | `false` | `src/lib/plugins/devMode.ts` | Enable hot-reload watch mode for plugin development |
-
-### Memory System
-
-| Variable | Default | Source | Purpose |
-|----------|---------|--------|---------|
-| `MEMORY_RRF_K` | `60` | `src/lib/memory/vectorStore.ts` | Reciprocal Rank Fusion k constant (higher = flatter ranking) |
-| `MEMORY_VEC_TOP_K` | `20` | `src/lib/memory/vectorStore.ts` | Default top-K for vector search |
-
-### Proxy Health
-
-| Variable | Default | Source | Purpose |
-|----------|---------|--------|---------|
-| `PROXY_FAST_FAIL_TIMEOUT_MS` | `2000` | `src/lib/proxyHealth.ts` | TCP timeout for proxy health check |
-| `PROXY_HEALTH_CACHE_TTL_MS` | `30000` | `src/lib/proxyHealth.ts` | How long to cache proxy health result |
-
 ### ACP (Agent Client Protocol)
 
 > ACP session management uses hardcoded defaults in `src/lib/acp/manager.ts`. No environment variable overrides are currently supported.
@@ -1028,12 +1013,7 @@ The following variables were added in v3.8.16 (alongside the new plugin, memory,
 
 > RTK compression settings are configured via the dashboard Settings page or MCP tools (`compression_configure`). No environment variable overrides are currently supported.
 
-### Embedding Cache
-
-| Variable | Default | Source | Purpose |
-|----------|---------|--------|---------|
-| `MEMORY_EMBEDDING_CACHE_MAX` | `1000` | `src/lib/memory/embedding/cache.ts` | LRU cache size for embeddings |
-| `MEMORY_EMBEDDING_CACHE_TTL_MS` | `300000` | `src/lib/memory/embedding/cache.ts` | Cache TTL (5min default) |
+> Note: `MEMORY_RRF_K`, `MEMORY_VEC_TOP_K`, `PROXY_FAST_FAIL_TIMEOUT_MS`, `PROXY_HEALTH_CACHE_TTL_MS`, `MEMORY_EMBEDDING_CACHE_MAX`, and `MEMORY_EMBEDDING_CACHE_TTL_MS` were also added in v3.8.16 but are documented in their respective sections above.
 
 ### Validation
 

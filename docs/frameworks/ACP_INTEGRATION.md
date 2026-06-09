@@ -279,7 +279,7 @@ Streamed as one JSON object per line on stdout:
 
 > **Note:** ACP session management is handled internally by `src/lib/acp/manager.ts`. Sessions are spawned automatically when a request is routed through an ACP agent (e.g., `model: "claude-code/default"`). There are no dedicated REST endpoints for spawning, sending to, or terminating ACP sessions — the session lifecycle is managed transparently by the request pipeline.
 
-Sessions can be terminated by calling `POST /api/acp/agents/[id]/terminate`, which forces the child process to terminate.
+> There is no REST endpoint to terminate a running ACP session. Termination happens automatically via the inactivity timeout, or when the OmniRoute process exits.
 
 ### Auto-Timeout
 
@@ -544,4 +544,4 @@ If you want others to use your ACP agent, submit it to the OmniRoute ACP registr
 - [CLI_TOKEN.md](../security/CLI_TOKEN.md) — CLI auth tokens
 - [INTERNAL_API_ROUTES.md](../reference/INTERNAL_API_ROUTES.md) — full ACP API
 - [MONITORING_GUIDE.md](../ops/MONITORING_GUIDE.md) — ACP session monitoring
-- Source: `src/lib/acp/` (registry + manager + 14 agent adapters)
+- Source: `src/lib/acp/` (registry + manager; 14 agent definitions in `registry.ts`)
