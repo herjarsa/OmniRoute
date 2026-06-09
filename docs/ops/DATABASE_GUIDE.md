@@ -90,23 +90,23 @@ OmniRoute has **76 module files** in `src/lib/db/`. Below is a sampling of core 
 | Module | Tables | Responsibility |
 |--------|--------|----------------|
 | `providers.ts` | `provider_connections` | OAuth/API key provider registration and credentials |
-| `models.ts` | `models` | Model definitions, capabilities, pricing |
-| `combos.ts` | `combos`, `combo_targets` | Combo routing configs, target ordering |
+| `models.ts` | `key_value` (model data) | Model definitions, capabilities, pricing |
+| `combos.ts` | `combos` | Combo routing configs and ordering |
 | `apiKeys.ts` | `api_keys` | API key lifecycle, scopes, quota tracking |
-| `settings.ts` | `settings` | KV store for system configuration |
+| `settings.ts` | `key_value`, `api_keys`, `combos` | System configuration and shared KV store |
 | `backup.ts` | — | Backup export/import operations |
-| `proxies.ts` | `proxies` | Proxy configs and routing rules |
-| `prompts.ts` | `prompts` | Reusable prompt templates, versioning |
+| `proxies.ts` | `proxy_registry`, `proxy_assignments`, `provider_connections` | Proxy configs and routing rules |
+| `prompts.ts` | `prompt_templates` | Reusable prompt templates, versioning |
 | `webhooks.ts` | `webhooks` | Event-driven webhook subscriptions and logs |
-| `detailedLogs.ts` | `detailed_logs` | Per-request audit logging (optional, high volume) |
-| `domainState.ts` | `domain_state` | Transient runtime state |
-| `registeredKeys.ts` | `registered_keys` | Whitelisted API keys for MCP/A2A |
+| `detailedLogs.ts` | `request_detail_logs` | Per-request audit logging (optional, high volume) |
+| `domainState.ts` | `domain_*` (5 tables) | Domain budgets, circuit breakers, lockouts, fallback chains, cost history |
+| `registeredKeys.ts` | `registered_keys`, `account_key_limits`, `provider_key_limits` | Whitelisted API keys for MCP/A2A |
 | `quotaSnapshots.ts` | `quota_snapshots` | Historical quota usage |
 | `modelComboMappings.ts` | `model_combo_mappings` | Map models to combo defaults |
 | `cliToolState.ts` | `cli_tool_state` | CLI-specific persistent state |
 | `encryption.ts` | — | Helpers for encrypting/decrypting fields |
 | `readCache.ts` | — | In-memory cache for read-heavy ops |
-| `secrets.ts` | `secrets` | Encrypted secret storage |
+| `secrets.ts` | `key_value` (encrypted entries) | Encrypted secret storage |
 | `stateReset.ts` | — | Wipe/reset DB state for testing |
 | `contextHandoffs.ts` | `context_handoffs` | Session context for agent handoff |
 | `usage*.ts` | `usage_history`, `call_logs`, `proxy_logs` | Usage tracking |
@@ -137,23 +137,23 @@ This rule is enforced by code review — there's no static check, but violations
 
 | Table | Purpose | Key columns |
 |-------|---------|-------------|
-| `provider_connections` | Provider credentials (encrypted) | `id`, `provider`, `type`, `api_key_encrypted` |
-| `provider_nodes` | Provider node routing info | `id`, `provider`, `node_name`, `endpoint` |
-| `key_value` | General KV store | `key`, `value` |
-| `combos` | Routing combo definitions | `id`, `name`, `strategy`, `enabled` |
-| `api_keys` | API keys for the gateway | `id`, `name`, `key_hash`, `scopes`, `quota_limit_cents` |
+| `provider_connections` | Provider credentials (encrypted) | `id`, `provider`, `auth_type`, `api_key`, `is_active` |
+| `provider_nodes` | Provider node routing info | `id`, `type`, `name`, `base_url`, `created_at` |
+| `key_value` | General KV store | `namespace`, `key`, `value` |
+| `combos` | Routing combo definitions | `id`, `name`, `data`, `sort_order` |
+| `api_keys` | API keys for the gateway | `id`, `name`, `key`, `machine_id`, `allowed_models` |
 | `db_meta` | Database metadata | `key`, `value` |
-| `usage_history` | Request usage records | `id`, `api_key_id`, `provider`, `model`, `tokens`, `cost_cents` |
-| `call_logs` | Request payloads & responses | `id`, `usage_id`, `status`, `latency_ms`, `error` |
-| `proxy_logs` | Proxy request logs | `id`, `timestamp`, `proxy_id`, `status` |
-| `domain_fallback_chains` | Domain-to-provider chains | `domain`, `provider_list` |
-| `domain_budgets` | Per-domain spend budgets | `domain`, `budget_cents`, `reset_window` |
-| `domain_budget_reset_logs` | Budget reset history | `id`, `domain`, `reset_at`, `previous_used` |
-| `domain_cost_history` | Per-domain cost tracking | `domain`, `date`, `cost_cents` |
-| `domain_lockout_state` | Domain rate-limit state | `domain`, `locked_until`, `reason` |
-| `domain_circuit_breakers` | Circuit breaker state per domain | `domain`, `state`, `failure_count`, `last_failure` |
-| `semantic_cache` | LLM response cache | `id`, `hash`, `response`, `expires_at` |
-| `quota_snapshots` | Historical quota snapshots | `api_key_id`, `window`, `used_cents`, `reset_at` |
+| `usage_history` | Request usage records | `id`, `provider`, `model`, `tokens_input`, `tokens_output`, `timestamp` |
+| `call_logs` | Request payloads & responses | `id`, `timestamp`, `status`, `model`, `provider`, `latency_ms` |
+| `proxy_logs` | Proxy request logs | `id`, `timestamp`, `proxy_type`, `status`, `provider` |
+| `domain_fallback_chains` | Model-to-provider chains | `model`, `chain` |
+| `domain_budgets` | Per-domain spend budgets | `api_key_id`, `daily_limit_usd`, `warning_threshold`, `reset_interval` |
+| `domain_budget_reset_logs` | Budget reset history | `id`, `api_key_id`, `reset_interval`, `previous_spend`, `reset_at` |
+| `domain_cost_history` | Per-domain cost tracking | `id`, `api_key_id`, `cost`, `timestamp` |
+| `domain_lockout_state` | Domain rate-limit state | `identifier`, `attempts`, `locked_until` |
+| `domain_circuit_breakers` | Circuit breaker state per domain | `name`, `state`, `failure_count`, `last_failure_time` |
+| `semantic_cache` | LLM response cache | `id`, `signature`, `model`, `prompt_hash`, `response` |
+| `quota_snapshots` | Historical quota snapshots | `id`, `provider`, `connection_id`, `window_key`, `remaining_percentage` |
 
 ### Additional Tables (added by later migrations)
 
@@ -170,7 +170,6 @@ Subsequent migrations add tables such as:
 - `acp_*` tables — Agent Client Protocol
 - `oneproxy_*` tables — 1proxy marketplace
 - `proxy_assignments` — proxy scope bindings
-- `proxy_logs` — proxy usage logs
 - `detailed_call_artifacts` — call log artifacts metadata
 - `quota_alert_history` — quota alert audit
 - `command_code_auth_sessions` — Command Code OAuth sessions
@@ -273,10 +272,10 @@ return { encrypted, iv, authTag };
 
 ### Where It's Used
 
-- `provider_connections.api_key_encrypted`
-- `provider_connections.oauth_token_encrypted`
-- `secrets.value_encrypted`
-- `proxy_registry.auth_encrypted`
+- `provider_connections.api_key` — encrypted at application level
+- `provider_connections.access_token`, `refresh_token`, `id_token` — encrypted at application level
+- `key_value` entries with `namespace = "secrets"` — encrypted at application level
+- `proxy_registry.auth` — encrypted at application level (if present)
 
 ### Encryption Key
 

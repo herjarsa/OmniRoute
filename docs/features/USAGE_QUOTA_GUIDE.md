@@ -155,21 +155,20 @@ For any date range, the analytics layer computes:
 ### Programmatic Access
 
 ```ts
-import { computeAnalytics } from "omniroute/usage/analytics";
+import { computeAnalytics } from "@/lib/usageAnalytics";
 
 const analytics = await computeAnalytics(
   history,              // usage history records
   "7d",                 // time range: "1d" | "7d" | "30d" | "90d" | "ytd" | "all" | "custom"
-  connectionMap,        // provider connection map
+  connectionMap,        // provider connection map (connectionId → account name)
   {
-    apiKeyId: "key-123",  // optional: filter to one key
-    groupBy: "model",     // optional: "model" | "provider" | "day" | "combo"
+    startDate: "2025-01-01",  // optional: for "custom" range
+    endDate: "2025-06-01",   // optional: for "custom" range
   }
 );
 
-console.log(analytics.summary.totalCost);  // $12.34
-console.log(analytics.models[0]);          // { model: "gpt-5", cost: 8.50, requests: 1234 }
-```
+console.log(analytics.summary.totalCost);   // 12.34 (cents)
+console.log(analytics.byModel[0]);           // { model, cost, requests, promptTokens, completionTokens }
 
 ---
 
