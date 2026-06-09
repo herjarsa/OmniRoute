@@ -149,7 +149,6 @@ curl -X GET "http://localhost:20128/api/files/[outputFileId]/content" \
 curl -X GET "http://localhost:20128/api/files/[errorFileId]/content" \
   -H "Authorization: Bearer $OMNIROUTE_KEY" \
   --output errors.jsonl
-```
 
 **results.jsonl format:**
 

@@ -436,6 +436,7 @@ omniroute backup export > /backups/pre-upgrade.json
 # 4. Compress and archive
 gzip /backups/pre-upgrade.json
 gzip /backups/pre-upgrade.db
+mv /backups/pre-upgrade.json.gz /backups/pre-upgrade-$(date +%Y%m%d).json.gz
 mv /backups/pre-upgrade.db.gz /backups/pre-upgrade-$(date +%Y%m%d).db.gz
 
 # 5. Now safe to upgrade

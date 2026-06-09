@@ -278,9 +278,8 @@ Streamed as one JSON object per line on stdout:
 ## Session Lifecycle
 
 > **Note:** ACP session management is handled internally by `src/lib/acp/manager.ts`. Sessions are spawned automatically when a request is routed through an ACP agent (e.g., `model: "claude-code/default"`). There are no dedicated REST endpoints for spawning, sending to, or terminating ACP sessions — the session lifecycle is managed transparently by the request pipeline.
-```
 
-Forces the child process to terminate.
+Sessions can be terminated by calling `POST /api/acp/agents/[id]/terminate`, which forces the child process to terminate.
 
 ### Auto-Timeout
 

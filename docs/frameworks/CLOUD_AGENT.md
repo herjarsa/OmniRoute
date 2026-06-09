@@ -461,26 +461,23 @@ POST /api/webhooks
 }
 ```
 
-Webhook payload:
-
 ```json
 {
   "type": "cloud.plan.ready",
   "taskId": "task-abc123",
-  "agent": "devin",
+  "providerId": "devin",
   "plan": "Migrate auth to OAuth 2.1...\n\nFiles to modify: 3\nEstimated time: 30min\nEstimated credits: $3.50",
   "estimatedCost": 3.50,
-  "maxCost": 5.00,
   "approvalUrl": "http://localhost:20128/dashboard/cloud-tasks/task-abc123",
   "expiresAt": "2026-06-08T18:00:00Z"
 }
 ```
 
-The user clicks the approval URL (or POSTs to `/api/cloud/tasks/{id}/approve`) to proceed.
+The user clicks the approval URL (or sends `POST /api/v1/agents/tasks/{id}` with `{"action":"approve"}`) to proceed.
 
 ### Credit Limits
 
-> **Note:** Credit limits for cloud agents are managed internally by `src/lib/cloudAgent/CloudAgentBase.ts`. Task-level `maxCredits` can be set when creating tasks via `/api/v1/agents/tasks`. Per-key daily limits are configured via the dashboard Settings page.
+> **Note:** Credit limits for cloud agents are managed internally by `src/lib/cloudAgent/CloudAgentBase.ts`. Task-level `options.planApprovalRequired` can be set when creating tasks via `/api/v1/agents/tasks`. Per-key daily limits are configured via the dashboard Settings page.
 
 ## Cost Tracking
 
@@ -553,8 +550,8 @@ Mitigation:
 
 ### "Task failed with insufficient_credits"
 
-The task exceeded `maxCredits`. To continue:
-1. Increase `maxCredits` and re-submit
+The task exceeded its credit limit. To continue:
+1. Increase the task budget and re-submit
 2. Split the task into smaller pieces
 3. Use a different agent (e.g., swap Devin for Codex)
 
