@@ -208,7 +208,7 @@ export async function handleChat(request: NextRequest) {
 
 Despite being one giant function, it's organized into **commented sections** that map to the 5-stage pipeline.
 
-### combo.ts (800 LOC)
+### combo.ts (4456 LOC)
 
 The **routing engine** that resolves a combo to ordered targets.
 
@@ -227,25 +227,27 @@ export async function handleComboChat(body, comboId): Promise<ChatResult> {
 }
 ```
 
-Supports **13 routing strategies** (see `src/shared/constants/routingStrategies.ts`):
+Supports **15 routing strategies** (see `src/shared/constants/routingStrategies.ts`):
 
 | Strategy | Behavior |
 |----------|----------|
 | `priority` | First-target ordered list |
 | `weighted` | Probabilistic by per-target weight |
 | `round-robin` | Cycle through targets in order |
-| `P2C` | Power of two choices |
+| `context-relay` | Hand off context across targets |
+| `fill-first` | Fill quota before moving to next |
+| `p2c` | Power of two choices |
 | `random` | Uniform random |
 | `least-used` | Pick the one with fewest recent uses |
-| `fill-first` | Fill quota before moving to next |
 | `cost-optimized` | Cheapest healthy target first |
+| `reset-aware` | Aware of provider reset windows |
+| `reset-window` | Reset window-based routing |
 | `strict-random` | Truly uniform (no quality weighting) |
 | `auto` | Use 9-factor scoring (`autoCombo/`) |
 | `lkgp` | Last known good provider first |
 | `context-optimized` | Best for long-context requests |
-| `context-relay` | Hand off context across targets |
 
-### base.ts (47K LOC)
+### base.ts (1170 LOC)
 
 The **abstract executor** that all 59 executors extend. It contains:
 

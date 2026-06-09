@@ -83,7 +83,9 @@ OmniRoute's database has **76 domain modules** in `src/lib/db/`. Each module:
 - Never touches another module's tables
 - Uses `getDbInstance()` from `core.ts` to access the DB
 
-### The 22+ Modules
+### The 76 DB Modules
+
+OmniRoute has **76 module files** in `src/lib/db/`. Below is a sampling of core modules; see the directory listing for the complete list:
 
 | Module | Tables | Responsibility |
 |--------|--------|----------------|

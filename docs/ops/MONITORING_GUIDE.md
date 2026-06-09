@@ -9,13 +9,13 @@ lastUpdated: 2026-06-08
 > **TL;DR**: OmniRoute ships with built-in health monitoring, provider autopi lots, quota tracking, and observability hooks. This guide covers the dashboard, alerts, and troubleshooting.
 
 **Sources:**
-- `src/lib/monitoring/observability.ts` (7K) — observability snapshot
-- `src/lib/monitoring/comboHealthAutopilot.ts` (15K) — combo health autopilot
-- `src/lib/monitoring/providerHealthAutopilot.ts` (25K) — provider autopilot
-- `src/lib/monitoring/providerHealthMatrix.ts` (22K) — provider health matrix
-- `src/lib/localHealthCheck.ts` (9K) — local health check
-- `src/lib/tokenHealthCheck.ts` (22K) — token refresh health
-- `src/lib/proxyHealth.ts` (4K) — proxy health cache (covered in PROXY_GUIDE.md)
+- `src/lib/monitoring/observability.ts` — observability snapshot
+- `src/lib/monitoring/comboHealthAutopilot.ts` — combo health autopilot
+- `src/lib/monitoring/providerHealthAutopilot.ts` — provider autopilot
+- `src/lib/monitoring/providerHealthMatrix.ts` — provider health matrix
+- `src/lib/localHealthCheck.ts` — local health check
+- `src/lib/tokenHealthCheck.ts` — token refresh health
+- `src/lib/proxyHealth.ts` — proxy health cache (covered in PROXY_GUIDE.md)
 
 ---
 

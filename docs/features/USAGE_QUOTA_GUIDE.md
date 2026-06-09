@@ -285,17 +285,13 @@ Response:
 }
 ```
 
-### Export Usage Data
+### Query Usage Analytics
 
-```bash
-# CSV export
-GET /api/usage/export?range=30d&format=csv
+Usage data is accessed via the dashboard or MCP tools, not direct REST export endpoints. Available analytics:
 
-# JSON export
-GET /api/usage/export?range=30d&format=json
-```
-
-Returns a downloadable file with all records in the date range.
+- **`/api/usage/analytics`** — aggregated usage metrics (group by model, provider, key)
+- **`/api/usage/quota`** — current quota status per API key
+- **`/api/usage/history`** — request history logs
 
 ---
 
@@ -411,9 +407,10 @@ await updateApiKey(keyId, { quotaLimit: 10_00 });  // $10/month cap
 
 ### 5. Audit Top Consumers
 
+Use the dashboard or **`/api/usage/analytics`** to group by API key and sort by cost:
+
 ```bash
-# Top 10 API keys by cost this month
-GET /api/usage/top-keys?range=30d&limit=10
+GET /api/usage/analytics?groupBy=apiKey
 ```
 
 ---
@@ -422,8 +419,8 @@ GET /api/usage/top-keys?range=30d&limit=10
 
 ### "Cost is higher than expected"
 
-1. Check `GET /api/usage/analytics?groupBy=model` — find the expensive model
-2. Check `GET /api/usage/top-keys` — find the heavy consumer
+1. Check **`/api/usage/analytics?groupBy=model`** — find the expensive model
+2. Check **`/api/usage/analytics?groupBy=apiKey`** — find the heavy consumer
 3. Verify pricing data is up to date: `POST /api/admin/pricing/sync`
 
 ### "Records missing"
