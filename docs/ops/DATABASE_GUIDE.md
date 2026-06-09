@@ -9,7 +9,7 @@ lastUpdated: 2026-06-08
 > **TL;DR**: OmniRoute uses **SQLite with WAL journaling** as its primary store, with **AES-256-GCM** encryption at rest for sensitive fields. This guide covers the schema, migrations, backup/recovery, and operational runbooks.
 
 **Sources:**
-- `src/lib/db/core.ts` — singleton + SCHEMA_SQL (18 base tables)
+- `src/lib/db/core.ts` — singleton + SCHEMA_SQL (17 base tables)
 - `src/lib/db/migrationRunner.ts` — versioned migrations
 - `src/lib/db/migrations/` — 94 versioned SQL files
 - `src/lib/db/encryption.ts` — encryption helpers
