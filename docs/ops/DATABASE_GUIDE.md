@@ -40,9 +40,9 @@ For **single-user, single-instance** deployments (the primary OmniRoute use case
 ```ts
 // src/lib/db/core.ts
 db.pragma("journal_mode = WAL");
+db.pragma("busy_timeout = 5000");
 db.pragma("synchronous = NORMAL");
-db.pragma("foreign_keys = ON");
-db.pragma("temp_store = MEMORY");
+db.pragma("cache_size = -2048");
 ```
 
 WAL allows **concurrent reads** during writes — important for the dashboard, which queries while requests are being recorded.
@@ -127,33 +127,35 @@ This rule is enforced by code review — there's no static check, but violations
 
 ---
 
-## Base Schema (18 tables)
+## Base Schema (17 tables)
 
-`core.ts` defines the 18 base tables in `SCHEMA_SQL`. These are created by migration `001_initial_schema.sql` and form the core schema.
+`core.ts` defines the 17 base tables in `SCHEMA_SQL`. These are created by migration `001_initial_schema.sql` and form the core schema.
 
 ### Core Tables (created in initial migration)
 
 | Table | Purpose | Key columns |
 |-------|---------|-------------|
-| `provider_connections` | Provider credentials (encrypted) | `id`, `provider`, `type`, `api_key_encrypted`, `oauth_token_encrypted` |
-| `models` | Model catalog | `id`, `provider`, `model_id`, `display_name`, `capabilities` |
+| `provider_connections` | Provider credentials (encrypted) | `id`, `provider`, `type`, `api_key_encrypted` |
+| `provider_nodes` | Provider node routing info | `id`, `provider`, `node_name`, `endpoint` |
+| `key_value` | General KV store | `key`, `value` |
 | `combos` | Routing combo definitions | `id`, `name`, `strategy`, `enabled` |
-| `combo_targets` | Ordered targets within a combo | `id`, `combo_id`, `provider`, `model`, `priority` |
 | `api_keys` | API keys for the gateway | `id`, `name`, `key_hash`, `scopes`, `quota_limit_cents` |
-| `settings` | KV configuration | `key`, `value`, `updated_at` |
-| `secrets` | Encrypted secret storage | `id`, `name`, `value_encrypted`, `created_at` |
-| `proxies` | Proxy registry | `id`, `host`, `port`, `scheme`, `auth` |
-| `prompts` | Reusable prompt templates | `id`, `name`, `content`, `version` |
-| `webhooks` | Webhook subscriptions | `id`, `url`, `events`, `secret` |
-| `detailed_logs` | Optional high-volume audit log | `id`, `timestamp`, `level`, `message` |
-| `domain_state` | Transient runtime state | `key`, `value`, `expires_at` |
-| `registered_keys` | MCP/A2A whitelist | `key_id`, `scopes` |
-| `quota_snapshots` | Historical quota | `api_key_id`, `window`, `used_cents`, `reset_at` |
-| `model_combo_mappings` | Model-to-combo defaults | `model_id`, `combo_id` |
+| `db_meta` | Database metadata | `key`, `value` |
+| `usage_history` | Request usage records | `id`, `api_key_id`, `provider`, `model`, `tokens`, `cost_cents` |
+| `call_logs` | Request payloads & responses | `id`, `usage_id`, `status`, `latency_ms`, `error` |
+| `proxy_logs` | Proxy request logs | `id`, `timestamp`, `proxy_id`, `status` |
+| `domain_fallback_chains` | Domain-to-provider chains | `domain`, `provider_list` |
+| `domain_budgets` | Per-domain spend budgets | `domain`, `budget_cents`, `reset_window` |
+| `domain_budget_reset_logs` | Budget reset history | `id`, `domain`, `reset_at`, `previous_used` |
+| `domain_cost_history` | Per-domain cost tracking | `domain`, `date`, `cost_cents` |
+| `domain_lockout_state` | Domain rate-limit state | `domain`, `locked_until`, `reason` |
+| `domain_circuit_breakers` | Circuit breaker state per domain | `domain`, `state`, `failure_count`, `last_failure` |
+| `semantic_cache` | LLM response cache | `id`, `hash`, `response`, `expires_at` |
+| `quota_snapshots` | Historical quota snapshots | `api_key_id`, `window`, `used_cents`, `reset_at` |
 
 ### Additional Tables (added by later migrations)
 
-Beyond the 18 base tables, subsequent migrations add:
+Subsequent migrations add tables such as:
 - `cli_tool_state` (migration 011) — CLI tool state
 - `mcp_*` tables — MCP server audit
 - `a2a_*` tables — A2A task state

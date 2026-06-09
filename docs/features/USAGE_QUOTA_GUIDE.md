@@ -126,7 +126,7 @@ For models with no pricing data, OmniRoute falls back to **estimating cost** usi
 
 ## Date Range Aggregation
 
-The `usageAnalytics.ts` module computes dashboard widgets from raw usage data. It supports 6 time ranges:
+The `usageAnalytics.ts` module computes dashboard widgets from raw usage data. It supports 7 time ranges:
 
 | Range | Window | Use case |
 |-------|--------|----------|
@@ -155,13 +155,17 @@ For any date range, the analytics layer computes:
 ### Programmatic Access
 
 ```ts
-import { getUsageAnalytics } from "omniroute/usage/analytics";
+import { computeAnalytics } from "omniroute/usage/analytics";
 
-const analytics = await getUsageAnalytics({
-  range: "7d",
-  apiKeyId: "key-123",  // optional: filter to one key
-  groupBy: "model",     // optional: "model" | "provider" | "day" | "combo"
-});
+const analytics = await computeAnalytics(
+  history,              // usage history records
+  "7d",                 // time range: "1d" | "7d" | "30d" | "90d" | "ytd" | "all" | "custom"
+  connectionMap,        // provider connection map
+  {
+    apiKeyId: "key-123",  // optional: filter to one key
+    groupBy: "model",     // optional: "model" | "provider" | "day" | "combo"
+  }
+);
 
 console.log(analytics.summary.totalCost);  // $12.34
 console.log(analytics.models[0]);          // { model: "gpt-5", cost: 8.50, requests: 1234 }
