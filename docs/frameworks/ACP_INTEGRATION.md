@@ -58,7 +58,7 @@ This enables OmniRoute to work with **subscription-based coding agents** that ha
 
 ## The 14 Built-in ACP Agents
 
-OmniRoute ships with **14 ready-to-use ACP agents** in `src/lib/acp/agents/`:
+OmniRoute ships with **14 ready-to-use ACP agents** defined in `src/lib/acp/registry.ts` (AGENT_DEFINITIONS):
 
 | Agent | CLI tool | Subscription | Use case |
 |-------|----------|--------------|----------|
@@ -75,7 +75,7 @@ OmniRoute ships with **14 ready-to-use ACP agents** in `src/lib/acp/agents/`:
 | `interpreter` | `i` | Open source | Open Interpreter |
 | `cursor-cli` | `cursor` | Cursor Pro | Cursor's CLI |
 | `warp` | `warp` | Warp account | Warp terminal AI |
-| `aide` | `aide` | Various | Aide.dev CLI |
+| `goose` | `goose` | Goose AI platform | Goose CLI |
 
 ### Checking Availability
 
@@ -338,22 +338,15 @@ ACP agents read their auth from environment variables:
 | `aider` | `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` | manual |
 | `qwen-code` | `QWEN_API_KEY` | Alibaba Cloud |
 
-### Process Limits
+### Configuration
 
-```bash
-# Max concurrent ACP sessions
-ACP_MAX_CONCURRENT_SESSIONS=5
+ACP process limits and timeouts are **hardcoded** in `src/lib/acp/manager.ts`. Currently:
+- **Concurrent sessions**: Unlimited (managed per-agent)
+- **Session timeout**: 5 minutes (default)
+- **Health check**: Every 30 seconds
+- **Output limits**: Truncated automatically if >1MB
 
-# Per-session timeout (seconds)
-ACP_SESSION_TIMEOUT=300
-
-# Health check interval (seconds)
-ACP_HEALTH_CHECK_INTERVAL=60
-```
-
-### Output Limits
-
-> ACP output limits are managed internally by `src/lib/acp/manager.ts`. Output truncation is handled automatically.
+No environment variable overrides are supported. To customize these, modify `src/lib/acp/manager.ts` directly.
 
 ---
 
@@ -387,7 +380,6 @@ GET /api/usage?provider=claude-code
 | `auth_failed` | Invalid/expired subscription | Re-authenticate |
 | `quota_exhausted` | Subscription limit hit | Wait for reset or upgrade plan |
 | `spawn_failed` | Process couldn't start | Check `cliPath` and permissions |
-| `timeout` | Session exceeded timeout | ACP session timeouts are managed internally |
 | `output_truncated` | Output too large | Output is truncated automatically |
 
 ### Retry Strategy
@@ -447,32 +439,6 @@ POST /api/keys
 
 ---
 
-## Webhook Integration
-
-Get notified when ACP sessions start/complete:
-
-```bash
-POST /api/webhooks
-{
-  "events": ["acp.session.started", "acp.session.completed", "acp.session.failed"]
-}
-```
-
-Payload:
-
-```json
-{
-  "type": "acp.session.completed",
-  "sessionId": "sess-abc123",
-  "agent": "claude-code",
-  "durationMs": 12345,
-  "exitCode": 0,
-  "timestamp": "2026-06-08T12:05:00Z"
-}
-```
-
----
-
 ## Performance
 
 ### Cold Start vs Warm
@@ -483,13 +449,13 @@ Payload:
 | **Warm** (subsequent requests) | 100-500ms (process reused) |
 | **Cached** (idle < 5min) | < 100ms |
 
-ACP agents keep their child processes alive for 5 minutes by default. Adjust with `ACP_KEEP_ALIVE_SECONDS`.
+ACP agents keep their child processes alive for 5 minutes by default. This is configured in the hardcoded defaults in `src/lib/acp/manager.ts`.
 
 ### Throughput
 
 Each ACP session handles **one request at a time**. To increase throughput:
 
-1. **Multiple sessions** (up to `ACP_MAX_CONCURRENT_SESSIONS`)
+1. **Multiple agents** (run different CLI tools in parallel)
 2. **Combo load balancing**:
    ```json
    {
@@ -505,11 +471,9 @@ Each ACP session handles **one request at a time**. To increase throughput:
 
 Each ACP session consumes:
 
-- **1 subprocess** (~50-100 MB RAM)
+- **1 subprocess** (~50-100 MB RAM per agent)
 - **1 CPU core** (varies by model)
 - **Network** (only when the CLI makes API calls)
-
-With `ACP_MAX_CONCURRENT_SESSIONS=5`, expect ~500 MB RAM overhead.
 
 ---
 

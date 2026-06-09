@@ -36,10 +36,12 @@ Management routes return `403` if the key lacks the `admin` scope.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/api/admin/backup` | Create JSON backup (returns file) |
-| POST | `/api/admin/backup/restore` | Restore from JSON |
-| GET | `/api/admin/db/backups` | List auto-backups |
-| GET | `/api/admin/db/backup-status` | Auto-backup health |
+| GET | `/api/db-backups` | List auto-backups + status |
+| PUT | `/api/db-backups` | Create new backup |
+| POST | `/api/db-backups` | Restore from backup |
+| GET | `/api/db-backups/export` | Export as JSON |
+| POST | `/api/db-backups/import` | Import from JSON |
+| GET | `/api/db-backups/exportAll` | Export all data (unrestricted) |
 
 ### Database
 
@@ -317,38 +319,35 @@ See [GUARDRAILS.md](../security/GUARDRAILS.md).
 
 ## ACP Routes (`/api/acp/*`)
 
+Only **one agent management endpoint** exists:
+
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/acp/agents` | List available ACP agents (CLIs) |
-| POST | `/api/acp/agents` | Register a new ACP agent |
-| GET | `/api/acp/agents/[id]` | Get agent config |
-| DELETE | `/api/acp/agents/[id]` | Remove agent |
-| POST | `/api/acp/agents/[id]/refresh` | Refresh agent status |
-| POST | `/api/acp/spawn` | Spawn ACP session |
-| GET | `/api/acp/sessions` | List active sessions |
-| GET | `/api/acp/sessions/[id]` | Session detail |
-| POST | `/api/acp/sessions/[id]/send` | Send input to session |
-| DELETE | `/api/acp/sessions/[id]` | Terminate session |
+| GET | `/api/acp/agents` | List available CLI agents + their installation status |
+| POST | `/api/acp/agents` | Register a custom ACP agent |
+| GET | `/api/acp/agents/[id]` | Get agent configuration |
 
-See [ACP.md](../frameworks/ACP.md) and [ACP_INTEGRATION.md](../frameworks/ACP_INTEGRATION.md) (when published).
+> ACP sessions are **in-memory** (managed by `src/lib/acp/manager.ts`), not exposed over HTTP. No `/api/acp/sessions/*` or `/api/acp/spawn` endpoints exist.
+
+See [ACP.md](../frameworks/ACP.md) and [ACP_INTEGRATION.md](../frameworks/ACP_INTEGRATION.md).
 
 ---
 
-## Cloud Agent Routes (`/api/cloud/*`)
+## Cloud Agent Routes (`/api/v1/agents/*`)
+
+Cloud agent task management is at `/api/v1/agents/`, not `/api/cloud/*`.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/cloud/agents` | List cloud agents (codex, devin, jules) |
-| GET | `/api/cloud/agents/[id]` | Agent config |
-| POST | `/api/cloud/agents/[id]/enable` | Enable |
-| POST | `/api/cloud/agents/[id]/disable` | Disable |
-| GET | `/api/cloud/tasks` | List tasks |
-| POST | `/api/cloud/tasks` | Create task |
-| GET | `/api/cloud/tasks/[id]` | Task detail |
-| DELETE | `/api/cloud/tasks/[id]` | Cancel task |
-| GET | `/api/cloud/credentials` | Stored credentials (metadata) |
-| POST | `/api/cloud/credentials` | Add credentials |
-| DELETE | `/api/cloud/credentials/[id]` | Remove credentials |
+| GET | `/api/v1/agents/tasks` | List cloud agent tasks (filter: provider, status, limit ≤ 500) |
+| POST | `/api/v1/agents/tasks` | Create task (dispatch to upstream provider + persist) |
+| GET | `/api/v1/agents/tasks/[id]` | Get task + lazy-sync status from upstream |
+| POST | `/api/v1/agents/tasks/[id]` | Action: `approve` / `message` / `cancel` |
+| DELETE | `/api/v1/agents/tasks/[id]` | Delete task by ID |
+| GET | `/api/v1/agents/credentials` | List cloud agent credentials (metadata only) |
+
+> The `/api/cloud/*` routes are **limited to auth, credentials/update, models/alias, model/resolve only**.
+> These are internal helper endpoints, not the main Cloud Agent API.
 
 See [CLOUD_AGENT.md](../frameworks/CLOUD_AGENT.md).
 

@@ -213,7 +213,8 @@ Webhook payload:
   "batchId": "batch_xyz789",
   "status": "completed",
   "requestCounts": { "total": 1000, "completed": 998, "failed": 2 },
-  "outputFileId": "file_results",
+  "outputFileId": "file_abc123def456",
+  "errorFileId": "file_xyz789uvw012",
   "timestamp": "2026-06-08T13:00:00Z"
 }
 ```

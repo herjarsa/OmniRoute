@@ -1032,9 +1032,8 @@ The following variables were added in v3.8.16 (alongside the new plugin, memory,
 
 | Variable | Default | Source | Purpose |
 |----------|---------|--------|---------|
-| `MEMORY_EMBEDDING_CACHE_SIZE` | `10000` | `src/lib/memory/embedding/cache.ts` | LRU cache size for embeddings |
-| `MEMORY_EMBEDDING_CACHE_TTL_MS` | `3600000` | `src/lib/memory/embedding/cache.ts` | Cache TTL (1h default) |
-| `MEMORY_VEC_TOP_K` | `20` | (see above) | Vector search top-K |
+| `MEMORY_EMBEDDING_CACHE_MAX` | `1000` | `src/lib/memory/embedding/cache.ts` | LRU cache size for embeddings |
+| `MEMORY_EMBEDDING_CACHE_TTL_MS` | `300000` | `src/lib/memory/embedding/cache.ts` | Cache TTL (5min default) |
 
 ### Validation
 

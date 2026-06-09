@@ -24,8 +24,8 @@ OmniRoute has **3 layers of backup**:
 | Layer | Trigger | Location | Retention |
 |-------|---------|----------|-----------|
 | **Auto** (DB snapshots) | Every state-mutating request (throttled to 1/hour) | `${DATA_DIR}/db_backups/db_*.db` | 20 files OR N days |
-| **Manual** (CLI/API) | `omniroute backup export` or `POST /api/admin/backup` | User-specified path | User-controlled |
-| **SQLite hot** | `sqlite3 .backup` command | User-specified path | User-controlled |
+| **Manual** (CLI/API) | `omniroute backup create` or `PUT /api/db-backups` | User-specified path | User-controlled |
+| **Export/Import** | `omniroute backup export\|import` or `GET/POST /api/db-backups/{export,import}` | User-specified path | User-controlled |
 
 ```
 ┌────────────────────────────────────────────────────────────┐
@@ -101,10 +101,10 @@ The timestamp uses ISO 8601 with colons and periods replaced by hyphens (for fil
 
 ### Monitoring
 
-Check auto-backup health:
+Check auto-backup health and list backups:
 
 ```bash
-GET /api/admin/db/backup-status
+GET /api/db-backups
 ```
 
 Response:
@@ -196,49 +196,37 @@ Commands:
 
 ## Manual Backups (API)
 
-### Export
+### Export (JSON)
 
 ```bash
-curl -X POST http://localhost:20128/api/admin/backup \
+curl -X GET http://localhost:20128/api/db-backups/export \
   -H "Authorization: Bearer $MANAGEMENT_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "include": ["all"],
-    "compress": true
-  }' \
-  --output backup.json.gz
+  --output backup.json
 ```
 
-**Request body:**
-
-| Field | Type | Default | Purpose |
-|-------|------|---------|---------|
-| `include` | array | `["all"]` | What to include: `all`, `tables`, `secrets`, `call_logs` |
-| `compress` | boolean | `true` | gzip-compress the response |
-| `encrypt` | boolean | `false` | Encrypt with management key (for offsite storage) |
-| `tables` | array | (all) | Specific tables to include (overrides `include`) |
-
-### Restore
+### Import (JSON)
 
 ```bash
-curl -X POST http://localhost:20128/api/admin/backup/restore \
+curl -X POST http://localhost:20128/api/db-backups/import \
   -H "Authorization: Bearer $MANAGEMENT_KEY" \
   -H "Content-Type: application/json" \
   -d @backup.json
 ```
 
-**Options:**
+### Export All (Unrestricted)
 
-| Field | Type | Default | Purpose |
-|-------|------|---------|---------|
-| `dryRun` | boolean | `false` | Validate without writing |
-| `merge` | boolean | `false` | Merge with existing data (vs overwrite) |
-| `skipTables` | array | `[]` | Tables to skip during restore |
+For exporting all data without filters:
+
+```bash
+curl -X GET http://localhost:20128/api/db-backups/exportAll \
+  -H "Authorization: Bearer $MANAGEMENT_KEY" \
+  --output backup-full.json
+```
 
 ### List Auto-Backups
 
 ```bash
-GET /api/admin/db/backups
+GET /api/db-backups
 ```
 
 Response:

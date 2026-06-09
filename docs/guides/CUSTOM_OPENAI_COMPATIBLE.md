@@ -54,28 +54,30 @@ Authorization: Bearer YOUR_API_KEY
 
 1. Open `http://localhost:20128/dashboard/providers`
 2. Click **+ Add Provider**
-3. Select **"OpenAI-compatible (custom)"** from the dropdown
+3. Select **"OpenAI-compatible"** (or **"Anthropic-compatible"**) from the modal dropdown
 4. Fill in:
    - **Name**: e.g., "My Local LLM"
+   - **Prefix**: e.g., `my-local-llm` (for model routing like `my-local-llm/qwen2.5-7b`)
    - **Base URL**: e.g., `http://localhost:1234/v1`
-   - **API Key**: e.g., `lm-studio` (or your actual key)
-   - **Models**: comma-separated list, e.g., `qwen2.5-7b-instruct,mistral-7b`
+   - **API Type**: `chat` (for chat completions) or `embeddings`, `images-generations`, etc.
 5. Click **Connect**
 
 **Via API:**
 
 ```bash
-curl -X POST http://localhost:20128/api/providers \
+curl -X POST http://localhost:20128/api/provider-nodes \
   -H "Authorization: Bearer $OMNIROUTE_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "My Local LLM",
+    "prefix": "my-local-llm",
     "type": "openai-compatible",
-    "baseUrl": "http://localhost:1234/v1",
-    "apiKey": "lm-studio",
-    "models": ["qwen2.5-7b-instruct", "mistral-7b"]
+    "apiType": "chat",
+    "baseUrl": "http://localhost:1234/v1"
   }'
 ```
+
+See `createProviderNodeSchema` in `src/shared/validation/schemas.ts` for full payload options.
 
 ### Step 3: Test
 
