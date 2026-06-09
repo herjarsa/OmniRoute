@@ -101,6 +101,8 @@ Per-combo:
 
 ## Health Check API
 
+> **Note:** Only `GET /api/monitoring/health` is exposed as a REST endpoint. All other monitoring data (provider health, autopilot issues, quota monitors, token health, latency) is accessed via the **MCP tool** `observability_snapshot` or the **dashboard** pages — there are no dedicated REST routes for these.
+
 ### System Health
 
 ```bash
@@ -133,61 +135,11 @@ Response:
 
 ### Provider Health
 
-```bash
-GET /api/monitoring/providers
-```
-
-Response:
-
-```json
-{
-  "providers": [
-    {
-      "id": "openai",
-      "health": "healthy",
-      "circuit_state": "closed",
-      "connections": 1,
-      "models": 12,
-      "today_cost": 1.23,
-      "errors_24h": 2
-    }
-  ]
-}
-```
+> **No REST endpoint.** Provider health data is available via the MCP tool `observability_snapshot` or the dashboard `/dashboard/providers` page.
 
 ### Provider Detail
 
-```bash
-GET /api/monitoring/providers/openai
-```
-
-Response:
-
-```json
-{
-  "id": "openai",
-  "health": "healthy",
-  "circuit_state": "closed",
-  "circuit_failure_count": 0,
-  "last_circuit_change": "2026-06-08T10:00:00Z",
-  "connections": [
-    {
-      "id": "conn-123",
-      "type": "api_key",
-      "health": "healthy",
-      "last_refresh": "2026-06-08T09:00:00Z",
-      "next_refresh": "2026-06-08T15:00:00Z",
-      "cooldown_until": null
-    }
-  ],
-  "models": [
-    { "id": "gpt-5", "health": "healthy", "lockout_until": null, "error_rate_24h": 0.01 }
-  ],
-  "recent_errors": [
-    { "timestamp": "2026-06-08T08:30:00Z", "class": "rate_limit", "count": 2 }
-  ]
-}
-```
+> **No REST endpoint.** Per-provider detail is available via the dashboard `/dashboard/providers` page.
 
 ---
 
@@ -225,57 +177,11 @@ The `providerHealthAutopilot.ts` module is a **self-healing system** that:
 
 ### API
 
-List current issues:
-
-```bash
-GET /api/monitoring/autopilot/issues
-```
-
-Response:
-
-```json
-{
-  "issues": [
-    {
-      "id": "issue-123",
-      "severity": "warning",
-      "kind": "connection_cooldown",
-      "provider": "openai",
-      "connectionId": "conn-456",
-      "title": "Connection 'OpenAI Production' in cooldown",
-      "description": "Last 429 at 2026-06-08T12:30:00Z, cooldown until 12:35:00Z",
-      "actions": [
-        {
-          "type": "clear_connection_cooldown",
-          "label": "Clear cooldown now",
-          "risk": "low",
-          "requiresConfirmation": false,
-          "target": { "provider": "openai", "connectionId": "conn-456" }
-        }
-      ]
-    }
-  ]
-}
-```
+> **No REST endpoint.** Autopilot issues are available via the MCP tool `observability_snapshot` or the dashboard. The autopilot runs internally and applies actions based on the configured mode (`AUTOPILOT_MODE`).
 
 ### Autopilot Mode
 
-Three modes control how issues are handled:
-
-```bash
-# Manual (default) — only show recommendations
-AUTOPILOT_MODE=manual
-
-# Confirm — show recommendations, require user click to apply
-AUTOPILOT_MODE=confirm
-
-# Auto — apply low-risk actions automatically
-AUTOPILOT_MODE=auto
-```
-
-When `auto` mode is enabled, the dashboard shows a banner:
-
-> 🤖 **Autopilot Active** — 3 low-risk actions were applied automatically in the last hour.
+The autopilot operates in **manual mode** by default — it detects issues and generates recommended actions, but does not auto-apply them. Actions can be applied via the dashboard.
 
 ---
 
@@ -335,34 +241,7 @@ interface QuotaMonitorSnapshot {
 
 ### API
 
-```bash
-GET /api/monitoring/quota-monitors
-```
-
-Response:
-
-```json
-{
-  "active": 4,
-  "alerting": 1,
-  "exhausted": 0,
-  "errors": 0,
-  "statusCounts": {
-    "starting": 0,
-    "idle": 1,
-    "healthy": 3,
-    "warning": 1,
-    "exhausted": 0,
-    "error": 0
-  },
-  "byProvider": {
-    "claude-code": 1,
-    "codex": 1,
-    "github-copilot": 1,
-    "cursor": 1
-  }
-}
-```
+> **No REST endpoint.** Quota monitor data is available via the MCP tool `observability_snapshot` or the dashboard.
 
 ---
 
@@ -425,38 +304,11 @@ interface TokenHealth {
 
 ### Configuration
 
-```bash
-# Check interval (default: 6h)
-TOKEN_HEALTH_CHECK_INTERVAL_MS=21600000
+Token health check configuration is handled internally by `tokenHealthCheck.ts`.
 
-# Pre-emptive refresh window (default: 30min)
-TOKEN_PREEMPTIVE_REFRESH_MINUTES=30
+### Token Health
 
-# Max consecutive failures before alert (default: 3)
-TOKEN_MAX_FAILURES=3
-```
-
-### Token Health API
-
-```bash
-GET /api/monitoring/token-health
-```
-
-Response:
-
-```json
-{
-  "tokens": [
-    {
-      "connectionId": "conn-123",
-      "provider": "claude-code",
-      "status": "valid",
-      "expiresAt": "2026-06-15T00:00:00Z",
-      "nextRefresh": "2026-06-14T23:30:00Z"
-    }
-  ]
-}
-```
+> **No REST endpoint.** Token health data is available via the dashboard or the MCP tool `observability_snapshot`.
 
 ---
 
@@ -474,29 +326,7 @@ OmniRoute supports **3 alert channels**:
 
 ### Webhook Configuration
 
-```bash
-# .env
-ALERT_WEBHOOK_URL=https://hooks.slack.com/services/...
-ALERT_WEBHOOK_EVENTS=provider_circuit_open,quota_exhausted,token_refresh_failed
-```
-
-Webhook payload (JSON):
-
-```json
-{
-  "type": "alert",
-  "severity": "critical",
-  "title": "OpenAI circuit breaker opened",
-  "message": "OpenAI provider circuit breaker is now OPEN after 5 consecutive failures. Last error: rate_limit at 2026-06-08T14:30:00Z",
-  "timestamp": "2026-06-08T14:31:00Z",
-  "context": {
-    "provider": "openai",
-    "failure_count": 5,
-    "last_error": "rate_limit",
-    "affected_combos": ["always-on", "coding-default"]
-  }
-}
-```
+> **Note:** Webhook alerting configuration is handled via the dashboard Settings page. See the Settings UI for webhook URL, event filtering, and payload customization.
 
 ### Alert Types
 
@@ -533,27 +363,7 @@ Webhook payload (JSON):
 
 ### Latency Percentiles (p50/p95/p99)
 
-The dashboard shows request latency percentiles over time:
-
-```bash
-GET /api/monitoring/latency?range=1h&percentiles=50,95,99
-```
-
-Response:
-
-```json
-{
-  "latency_ms": {
-    "p50": 1234,
-    "p95": 4567,
-    "p99": 8901
-  },
-  "byProvider": {
-    "openai": { "p50": 1200, "p95": 4000, "p99": 8000 },
-    "anthropic": { "p50": 1500, "p95": 5000, "p99": 9000 }
-  }
-}
-```
+> **No REST endpoint.** Latency percentile data is available via the dashboard `/dashboard/health` page. Prometheus/OpenTelemetry export is planned for v3.9.
 
 ### Prometheus / OpenTelemetry Export (Phase 2)
 
@@ -634,7 +444,7 @@ Create a `~/.omniroute/dashboard.json`:
 
 - 429 means the provider says you've used your quota
 - OmniRoute's quota tracking may be **stale** — the provider's truth is upstream
-- Run a **manual quota check**: `POST /api/monitoring/quota/refresh`
+- Quota data refreshes automatically via the internal quota monitor
 
 ### "Combo is failing but all targets look healthy"
 

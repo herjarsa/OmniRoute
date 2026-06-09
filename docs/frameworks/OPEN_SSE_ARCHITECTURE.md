@@ -6,9 +6,9 @@ lastUpdated: 2026-06-08
 
 # open-sse Architecture
 
-> **TL;DR**: `open-sse/` is the core streaming engine that powers every LLM request in OmniRoute. It contains ~400 files implementing the request pipeline, executors, services, MCP server, and translation layer. This guide explains how the pieces fit together.
+> **TL;DR**: `open-sse/` is the core streaming engine that powers every LLM request in OmniRoute. It contains ~406 files implementing the request pipeline, executors, services, MCP server, and translation layer. This guide explains how the pieces fit together.
 
-**Source:** `open-sse/` (workspace package, ~25K LOC across 400+ files)
+**Source:** `open-sse/` (workspace package, ~25K LOC across 406 files)
 
 ---
 
@@ -247,7 +247,7 @@ Supports **13 routing strategies** (see `src/shared/constants/routingStrategies.
 
 ### base.ts (47K LOC)
 
-The **abstract executor** that all 75+ executors extend. It contains:
+The **abstract executor** that all 59 executors extend. It contains:
 
 - `buildUrl()` — default URL construction (subclasses override for custom)
 - `buildHeaders()` — default headers (auth, content-type)

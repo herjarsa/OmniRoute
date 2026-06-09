@@ -75,7 +75,7 @@ const usage = response.usage || {
 };
 ```
 
-For providers that don't return usage (some web-cookie providers), OmniRoute **estimates** tokens using a `~4 chars per token` heuristic (see `open-sse/utils/tokenEstimate.ts`).
+For providers that don't return usage (some web-cookie providers), OmniRoute **estimates** tokens using a `~4 chars per token` heuristic (see `open-sse/services/autoCombo/pipelineRouter.ts`).
 
 ### Cached Tokens
 

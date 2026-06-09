@@ -9,9 +9,9 @@ lastUpdated: 2026-06-08
 > **TL;DR**: OmniRoute uses **SQLite with WAL journaling** as its primary store, with **AES-256-GCM** encryption at rest for sensitive fields. This guide covers the schema, migrations, backup/recovery, and operational runbooks.
 
 **Sources:**
-- `src/lib/db/core.ts` — singleton + SCHEMA_SQL (15 base tables)
+- `src/lib/db/core.ts` — singleton + SCHEMA_SQL (18 base tables)
 - `src/lib/db/migrationRunner.ts` — versioned migrations
-- `src/lib/db/migrations/` — 21+ versioned SQL files
+- `src/lib/db/migrations/` — 94 versioned SQL files
 - `src/lib/db/encryption.ts` — encryption helpers
 - `src/lib/db/backup.ts` — backup export/import
 - `src/lib/db/healthCheck.ts` — health diagnostics
@@ -76,7 +76,7 @@ DATA_DIR=/custom/path omniroute
 
 ## Domain Module Architecture
 
-OmniRoute's database has **22+ domain modules** in `src/lib/db/`. Each module:
+OmniRoute's database has **76 domain modules** in `src/lib/db/`. Each module:
 
 - Owns one or more specific tables
 - Exports typed CRUD functions
@@ -127,9 +127,9 @@ This rule is enforced by code review — there's no static check, but violations
 
 ---
 
-## Base Schema (15 tables)
+## Base Schema (18 tables)
 
-`core.ts` defines the 15 base tables in `SCHEMA_SQL`. These are created by migration `001_initial_schema.sql` and form the core schema.
+`core.ts` defines the 18 base tables in `SCHEMA_SQL`. These are created by migration `001_initial_schema.sql` and form the core schema.
 
 ### Core Tables (created in initial migration)
 
@@ -153,7 +153,7 @@ This rule is enforced by code review — there's no static check, but violations
 
 ### Additional Tables (added by later migrations)
 
-Beyond the 15 base tables, subsequent migrations add:
+Beyond the 18 base tables, subsequent migrations add:
 - `cli_tool_state` (migration 011) — CLI tool state
 - `mcp_*` tables — MCP server audit
 - `a2a_*` tables — A2A task state
