@@ -8,7 +8,7 @@ lastUpdated: 2026-06-08
 
 > **TL;DR**: `open-sse/` is the core streaming engine that powers every LLM request in OmniRoute. It contains ~406 files implementing the request pipeline, executors, services, MCP server, and translation layer. This guide explains how the pieces fit together.
 
-**Source:** `open-sse/` (workspace package, ~25K LOC across 406 files)
+**Source:** `open-sse/` (workspace package, ~143K LOC across 406 files)
 
 ---
 
@@ -136,7 +136,7 @@ Each provider has its own executor (e.g., `executors/openai.ts`, `executors/anth
 - Sends the HTTP request with retry + exponential backoff
 - Handles auth refresh if needed (OAuth providers)
 
-All executors extend `BaseExecutor` (`executors/base.ts`, 47K LOC) which provides:
+All executors extend `BaseExecutor` (`executors/base.ts`, 1170 LOC) which provides:
 - Common retry logic
 - Proxy integration
 - Circuit breaker integration
@@ -284,7 +284,7 @@ Services are **focused, single-purpose modules** that handlers compose. The big 
 ### Routing & Combo
 
 - `combo.ts` — entry point for combo-routed requests
-- `services/autoCombo/` — 9-factor scoring, 13+ strategies
+- `services/autoCombo/` — 9-factor scoring, 8 auto routing strategies
 - `wildcardRouter.ts` — matches wildcard routes (`gpt-*`)
 - `modelFamilyFallback.ts` — T5 intra-family fallback
 
@@ -603,4 +603,4 @@ The routing engine has strict performance budgets:
 - [AUTO-COMBO.md](../routing/AUTO-COMBO.md) — 9-factor scoring
 - [MCP-SERVER.md](./MCP-SERVER.md) — MCP server
 - [A2A-SERVER.md](./A2A-SERVER.md) — A2A server
-- Source: `open-sse/` (400+ files, ~25K LOC)
+- Source: `open-sse/` (400+ files, ~143K LOC)

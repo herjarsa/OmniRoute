@@ -369,7 +369,7 @@ OmniRoute supports **3 alert channels**:
 
 Planned for v3.9: native export to Prometheus, OpenTelemetry, Datadog.
 
-For now, scrape `/api/monitoring/*` endpoints with any HTTP-based monitoring system (Prometheus blackbox exporter, Datadog HTTP check, etc.).
+For now, scrape `/api/monitoring/health` with any HTTP-based monitoring system (Prometheus blackbox exporter, Datadog HTTP check, etc.).
 
 ---
 
@@ -480,4 +480,4 @@ MAX_CONCURRENT_REQUESTS=10 omniroute
 - [PROXY_GUIDE.md](./PROXY_GUIDE.md) — proxy health (separate cache)
 - [ARCHITECTURE.md](../architecture/ARCHITECTURE.md) — system architecture
 - [RESILIENCE_GUIDE.md](../architecture/RESILIENCE_GUIDE.md) — circuit breaker details
-- Source: `src/lib/monitoring/` (4 files, ~70K LOC)
+- Source: `src/lib/monitoring/` (4 files, 2121 LOC)
