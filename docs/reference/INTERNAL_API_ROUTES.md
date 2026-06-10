@@ -324,8 +324,6 @@ See [BATCHES_API.md](./BATCHES_API.md) (when published).
 | POST | `/api/batches` | Create batch |
 | GET | `/api/batches` | List batches |
 | GET | `/api/batches/[id]` | Batch detail |
-| POST | `/api/batches/[id]/cancel` | Cancel |
-| GET | `/api/batches/[id]/results` | Batch results |
 
 ---
 

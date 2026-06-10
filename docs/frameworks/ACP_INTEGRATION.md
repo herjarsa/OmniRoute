@@ -62,7 +62,7 @@ OmniRoute ships with **14 ready-to-use ACP agents** defined in `src/lib/acp/regi
 
 | Agent | CLI tool | Subscription | Use case |
 |-------|----------|--------------|----------|
-| `claude-code` | `claude` | Claude Pro/Max | Anthropic's coding agent |
+| `claude` | `claude` | Claude Pro/Max | Anthropic's coding agent |
 | `codex` | `codex` | ChatGPT Plus/Pro | OpenAI's coding agent |
 | `gemini-cli` | `gemini` | Gemini Advanced | Google's coding agent |
 | `openclaw` | `openclaw` | Free / paid | OmniClaw (omniroute's own) |
@@ -89,7 +89,7 @@ Response:
 {
   "agents": [
     {
-      "id": "claude-code",
+      "id": "claude",
       "name": "Claude Code",
       "cliPath": "claude",
       "installed": true,
