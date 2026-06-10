@@ -204,7 +204,6 @@ CREATE TABLE IF NOT EXISTS cloud_agent_tasks (
   updated_at   TEXT NOT NULL DEFAULT (datetime('now')),
   completed_at TEXT
 );
-CREATE INDEX IF NOT EXISTS idx_cloud_agent_tasks_provider ON cloud_agent_tasks(provider_id);
 CREATE INDEX IF NOT EXISTS idx_cloud_agent_tasks_status   ON cloud_agent_tasks(status);
 CREATE INDEX IF NOT EXISTS idx_cloud_agent_tasks_created  ON cloud_agent_tasks(created_at DESC);
 ```
@@ -386,7 +385,7 @@ Each cloud agent has its own credential flow. Credentials are stored **encrypted
 
 **Configure in OmniRoute:**
 
-> **Note:** Cloud agent credentials are configured via the dashboard **Cloud Agents** page or via the `/api/cloud/credentials/update` endpoint (PUT method). See the [Cloud Agent Base](src/lib/cloudAgent/CloudAgentBase.ts) implementation for credential storage details.
+> **Note:** Cloud agent credentials are configured via the dashboard **Cloud Agents** page or via the `/api/cloud/credentials/update` endpoint (PUT method). See the [Cloud Agent Base](../../src/lib/cloudAgent/baseAgent.ts) implementation for credential storage details.
 
 ### Devin
 
@@ -458,7 +457,7 @@ The user clicks the approval URL (or sends `POST /api/v1/agents/tasks/{id}` with
 
 ### Credit Limits
 
-> **Note:** Credit limits for cloud agents are managed internally by `src/lib/cloudAgent/CloudAgentBase.ts`. Task-level `options.planApprovalRequired` can be set when creating tasks via `/api/v1/agents/tasks`. Per-key daily limits are configured via the dashboard Settings page.
+> **Note:** Credit limits for cloud agents are managed internally by `../../src/lib/cloudAgent/baseAgent.ts`. Task-level `options.planApprovalRequired` can be set when creating tasks via `/api/v1/agents/tasks`. Per-key daily limits are configured via the dashboard Settings page.
 
 ## Cost Tracking
 
