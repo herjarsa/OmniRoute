@@ -418,30 +418,11 @@ PUT /api/cloud/credentials/update
 
 **Configure:**
 
-> **Note:** Cloud agent credentials are configured via the dashboard **Cloud Agents** page or via the `/api/cloud/credentials/update` endpoint (PUT method). See the [Cloud Agent Base](src/lib/cloudAgent/CloudAgentBase.ts) implementation for credential storage details.
+> **Note:** Cloud agent credentials are configured via the dashboard **Cloud Agents** page or via the `POST /api/v1/agents/credentials` endpoint.
 
 ### Verifying Credentials
 
-> **Note:** Cloud agent credential management is handled internally by `src/lib/cloudAgent/`. There is no dedicated REST endpoint for listing or verifying credentials — use the dashboard **Cloud Agents** page to view connection status.
-
-### Verifying Credentials
-
-```bash
-# List all stored credentials (keys are masked)
-GET /api/cloud/credentials
-
-# Response:
-{
-  "credentials": [
-    {
-      "providerId": "codex-cloud",
-      "apiKey": "sk-****abcd",
-      "baseUrl": null,
-      "updatedAt": "2026-06-08T12:00:00Z"
-    }
-  ]
-}
-```
+Credentials can be listed via `GET /api/v1/agents/credentials` (API keys are masked) or viewed on the dashboard.
 
 To verify a credential actually works, create a test task and check it succeeds.
 

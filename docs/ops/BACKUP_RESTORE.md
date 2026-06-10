@@ -8,7 +8,7 @@ lastUpdated: 2026-06-08
 
 > **TL;DR**: OmniRoute's backup system automatically creates versioned SQLite snapshots, supports manual exports via CLI/API, and integrates with S3-compatible storage. This guide covers operational runbooks for backup, restore, and disaster recovery.
 
-**Source:** `src/lib/db/backup.ts` (13.5K LOC) — full backup/restore implementation
+**Source:** `src/lib/db/backup.ts` (437 LOC) — full backup/restore implementation
 
 **Related:**
 - [DATABASE_GUIDE.md](./DATABASE_GUIDE.md) — base schema and operations
@@ -718,4 +718,4 @@ The encryption key on the restore machine doesn't match the source. Verify `OMNI
 - [RELEASE_CHECKLIST.md](./RELEASE_CHECKLIST.md) — pre-release backup procedure
 - [SQLITE_RUNTIME.md](./SQLITE_RUNTIME.md) — SQLite internals
 - [ENVIRONMENT.md](../reference/ENVIRONMENT.md) — backup-related env vars
-- Source: `src/lib/db/backup.ts` (13.5K LOC)
+- Source: `src/lib/db/backup.ts` (437 LOC)
