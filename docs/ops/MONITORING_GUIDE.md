@@ -177,7 +177,7 @@ The `providerHealthAutopilot.ts` module is a **self-healing system** that:
 
 ### API
 
-> **No REST endpoint.** Autopilot issues are available via the MCP tool `observability_snapshot` or the dashboard. The autopilot runs internally and applies actions based on the configured mode (`AUTOPILOT_MODE`).
+> **No REST endpoint.** Autopilot issues are available via the MCP tool `observability_snapshot` or the dashboard. The autopilot runs internally; its behavior is configured via the settings DB (per-connection `autopilotMode` field), not environment variables. There is no `AUTOPILOT_MODE` env var — `grep -rn "AUTOPILOT_MODE" src/ open-sse/` returns zero hits.
 
 ### Autopilot Mode
 
@@ -282,11 +282,11 @@ Agents use this to make **routing decisions** — for example, "if openai's circ
 
 ## Token Health Check
 
-OAuth providers (Claude Code, GitHub Copilot, Cursor) need **periodic token refresh**. `tokenHealthCheck.ts` runs a background scheduler:
+OAuth providers (Claude Code, GitHub Copilot, Cursor) need **periodic token refresh**. `src/lib/tokenHealthCheck.ts` runs a background scheduler:
 
-- **Every 6 hours**: check all OAuth tokens
-- **30 minutes before expiry**: pre-emptive refresh
-- **On 401 response**: immediate refresh + retry
+- **Sweep tick**: every 60 seconds (sweep in `TICK_MS = 60 * 1000` at `src/lib/tokenHealthCheck.ts:30`)
+- **Per-connection health check interval**: default 60 minutes (`DEFAULT_HEALTH_CHECK_INTERVAL_MIN = 60`); configurable via the settings DB
+- **Pre-emptive refresh on 401**: handled by the per-connection interceptor
 
 ### Token Health Status
 
@@ -376,25 +376,13 @@ For now, scrape `/api/monitoring/health` with any HTTP-based monitoring system (
 ## Alerting Recipes
 
 ### Slack
-
-1. Create Slack incoming webhook
-2. Set `ALERT_WEBHOOK_URL=https://hooks.slack.com/...`
-3. Set `ALERT_WEBHOOK_EVENTS=provider_circuit_open,quota_exhausted`
-
+> **Note:** Webhook alerting is configured through the dashboard Settings page (no `ALERT_WEBHOOK_URL` / `ALERT_WEBHOOK_EVENTS` env vars — `grep -rn` returns zero hits). See the Settings UI for webhook URL, event filtering, and payload customization.
 ### Discord
-
-1. Create Discord webhook
-2. Set `ALERT_WEBHOOK_URL=https://discord.com/api/webhooks/...`
-3. Discord accepts the same JSON payload as Slack
-
+> Webhook alerting uses the same Settings UI flow as Slack. Discord accepts the same JSON payload shape.
 ### PagerDuty
-
-1. Create PagerDuty Events API v2 integration
-2. Use the webhook URL with the routing_key
-
+> Webhook alerting uses the same Settings UI flow. PagerDuty Events API v2 routing keys are configured in the Settings UI.
 ### Custom Webhook (JSON)
-
-Any HTTP endpoint that accepts POST with JSON body will work. The payload is documented above.
+> Any HTTP endpoint that accepts POST with JSON body will work. Configure the URL in the Settings UI.
 
 ---
 
@@ -467,8 +455,8 @@ node -e "console.log(process.memoryUsage())"
 # Trigger manual GC (if --expose-gc)
 node --expose-gc -e "global.gc(); console.log(process.memoryUsage())"
 
-# Reduce concurrent requests
-MAX_CONCURRENT_REQUESTS=10 omniroute
+# Reduce concurrent requests (set via the dashboard Settings page, not an env var)
+# There is no `MAX_CONCURRENT_REQUESTS` env var — configure it in Settings → Concurrency.
 ```
 
 ---
