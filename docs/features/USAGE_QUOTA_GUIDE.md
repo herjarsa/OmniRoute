@@ -117,7 +117,7 @@ Pricing data is auto-synced from LiteLLM:
 PRICING_SYNC_CRON=0 6 * * 1  # Monday 6am UTC
 
 # Manual trigger
-curl -X POST http://localhost:20128/api/admin/pricing/sync
+curl -X POST http://localhost:20128/api/pricing/sync
 ```
 
 For models with no pricing data, OmniRoute falls back to **estimating cost** using average rates (configurable via `PRICING_FALLBACK_INPUT_CENTS` and `PRICING_FALLBACK_OUTPUT_CENTS`).
@@ -339,7 +339,6 @@ Old records are cleaned up by `src/lib/db/cleanup.ts`:
 - Runs daily at 3am UTC (configurable via `USAGE_CLEANUP_CRON`)
 - Deletes records older than `USAGE_RETENTION_DAYS`
 - Also clears call log artifacts (`${DATA_DIR}/call_logs/`) older than 30 days
-- Run manually: `omniroute usage cleanup --days 30`
 
 ### Storage Estimation
 
@@ -420,7 +419,7 @@ GET /api/usage/analytics?groupBy=apiKey
 
 1. Check **`/api/usage/analytics?groupBy=model`** — find the expensive model
 2. Check **`/api/usage/analytics?groupBy=apiKey`** — find the heavy consumer
-3. Verify pricing data is up to date: `POST /api/admin/pricing/sync`
+3. Verify pricing data is up to date: `POST /api/pricing/sync`
 
 ### "Records missing"
 

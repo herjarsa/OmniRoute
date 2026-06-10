@@ -279,14 +279,14 @@ return { encrypted, iv, authTag };
 
 ### Encryption Key
 
-The encryption key is derived from a **passphrase** (set via `OMNIROUTE_ENCRYPTION_KEY` env var) and a **salt** (stored in the DB). Both are required to decrypt data.
+The encryption key is derived from a **passphrase** (set via `STORAGE_ENCRYPTION_KEY` env var) and a **salt** (stored in the DB). Both are required to decrypt data.
 
 ```bash
 # Generate a secure passphrase
 openssl rand -hex 32
 
 # Set in .env
-OMNIROUTE_ENCRYPTION_KEY=<your-key>
+STORAGE_ENCRYPTION_KEY=<your-key>
 ```
 
 > **Critical**: Losing the encryption key means losing access to all encrypted data. **Back up the key separately from the database**.
@@ -339,13 +339,14 @@ Cache is invalidated on every write to the corresponding table.
 ### Manual Backup
 
 ```bash
-# Use the CLI
-omniroute backup export > backup-$(date +%Y%m%d).json
+# Use the CLI to create a local backup
+omniroute backup create --name pre-migration
 
 # Or via the API
-curl -X POST http://localhost:20128/api/admin/backup \
+curl -X PUT http://localhost:20128/api/db-backups \
   -H "Authorization: Bearer $MANAGEMENT_KEY" \
-  -d '{"include": ["all"]}' > backup.json
+  -H "Content-Type: application/json" \
+  -d '{"name": "pre-migration"}'
 ```
 
 The backup file includes:
@@ -359,12 +360,13 @@ The backup file includes:
 
 ```bash
 # Via CLI
-omniroute backup import < backup.json
+omniroute restore pre-migration
 
 # Via API
-curl -X POST http://localhost:20128/api/admin/backup/restore \
+curl -X POST http://localhost:20128/api/db-backups/restore \
   -H "Authorization: Bearer $MANAGEMENT_KEY" \
-  -d @backup.json
+  -H "Content-Type: application/json" \
+  -d '{"name": "pre-migration"}'
 ```
 
 > **Warning**: Restore overwrites the entire DB. Stop all clients first.
@@ -372,11 +374,8 @@ curl -X POST http://localhost:20128/api/admin/backup/restore \
 ### Automated Backups
 
 ```bash
-# Cron: daily backup at 2am
-0 2 * * * omniroute backup export > /backups/omniroute-$(date +\%Y\%m\%d).json
-
-# Keep last 7 days
-find /backups -name "omniroute-*.json" -mtime +7 -delete
+# Enable automated daily backups via CLI
+omniroute backup auto enable --cron "0 2 * * *" --retention 7
 ```
 
 ### SQLite Hot Backup
@@ -445,8 +444,7 @@ Run monthly during low-traffic windows. (WAL mode reduces the need, but doesn't 
 `src/lib/db/healthCheck.ts` provides **DB-level health diagnostics**:
 
 ```bash
-GET /api/admin/db/health
-```
+GET /api/db/health
 
 Returns:
 
@@ -537,11 +535,6 @@ SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';
 EOF
 ```
 
-Or use the built-in admin endpoint:
-
-```bash
-GET /api/admin/db/table-counts
-```
 
 ### Reset (Wipe) All Data
 
