@@ -1,10 +1,11 @@
-﻿import { SignJWT, jwtVerify } from "jose";
+﻿import crypto from "crypto";
+import { SignJWT, jwtVerify } from "jose";
 
 const COOKIE_NAME = "easyia_portal";
 
 function getSecret() {
   return new TextEncoder().encode(
-    process.env.SITE_PORTAL_SECRET || "easyia-local-portal-secret-change-me"
+    process.env.SITE_PORTAL_SECRET || crypto.randomBytes(32).toString("hex")
   );
 }
 

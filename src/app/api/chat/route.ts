@@ -19,7 +19,7 @@ export async function POST(request: Request) {
       ? body.apiKey.trim()
       : process.env.OMNIROUTE_DEMO_API_KEY;
 
-  const model = typeof body.model === "string" && body.model.trim() ? body.model : "global";
+  const model = typeof body.model === "string" && body.model.trim() ? body.model : "gpt-3.5-turbo";
   const message = typeof body.message === "string" ? body.message : "Ola";
 
   if (!apiKey) {

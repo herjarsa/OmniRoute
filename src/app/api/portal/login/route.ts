@@ -22,7 +22,7 @@ export async function POST(request: Request) {
   store.set(getPortalCookieName(), token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: false,
+    secure: process.env.NODE_ENV === "production", // true in production, false in dev
     path: "/",
     maxAge: 60 * 60 * 24 * 30,
   });
