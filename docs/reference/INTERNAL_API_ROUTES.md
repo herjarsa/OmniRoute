@@ -74,8 +74,6 @@ Management routes return `403` if the key lacks the `admin` scope.
 | GET | `/api/settings/cache-config` | Cache config |
 | GET | `/api/settings/cache-metrics` | Cache metrics |
 | GET | `/api/cache/stats` | Hit/miss/eviction by namespace |
-| POST | `/api/cache/flush` | Flush all namespaces |
-| POST | `/api/cache/invalidate` | Invalidate by key pattern |
 
 See [API_REFERENCE.md](./API_REFERENCE.md) for full schema details.
 
@@ -88,9 +86,6 @@ See [API_REFERENCE.md](./API_REFERENCE.md) for full schema details.
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/settings` | All settings |
-| GET | `/api/settings/[key]` | Single setting |
-| PATCH | `/api/settings/[key]` | Update setting |
-| DELETE | `/api/settings/[key]` | Delete setting |
 
 ### Compression
 
@@ -111,14 +106,6 @@ See [API_REFERENCE.md](./API_REFERENCE.md) for full schema details.
 | PATCH | `/api/settings/quota/[apiKeyId]` | Update quota limits |
 | GET | `/api/settings/quota/snapshots` | Recent snapshots |
 
-### MCP
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/settings/mcp` | MCP server config |
-| PATCH | `/api/settings/mcp` | Update config |
-| POST | `/api/settings/mcp/regenerate-token` | New MCP token |
-
 See [WEBHOOKS.md](../frameworks/WEBHOOKS.md) for webhook CRUD, delivery logs, and supported events.
 
 
@@ -135,23 +122,6 @@ See [WEBHOOKS.md](../frameworks/WEBHOOKS.md) for webhook CRUD, delivery logs, an
 | GET | `/api/cli-tools/codex-settings` | Codex config |
 | GET | `/api/cli-tools/openclaw-settings` | OpenClaw config |
 
-### Installation
-
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/cli-tools/install` | Install a CLI tool |
-| DELETE | `/api/cli-tools/[tool]` | Uninstall a tool |
-| POST | `/api/cli-tools/[tool]/upgrade` | Upgrade to latest version |
-| POST | `/api/cli-tools/[tool]/restart` | Restart CLI process |
-
-### State
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/cli-tools/state` | Persistent state across restarts |
-| POST | `/api/cli-tools/state/reset` | Clear state |
-| GET | `/api/cli-tools/state/[key]` | Specific state key |
-
 ---
 
 ## Skills Routes (`/api/skills/*`)
@@ -163,8 +133,6 @@ See [WEBHOOKS.md](../frameworks/WEBHOOKS.md) for webhook CRUD, delivery logs, an
 | GET | `/api/skills` | List installed skills |
 | POST | `/api/skills/install` | Install from marketplace |
 | DELETE | `/api/skills/[id]` | Uninstall |
-| POST | `/api/skills/[id]/enable` | Enable |
-| POST | `/api/skills/[id]/disable` | Disable |
 
 ### Execution
 
@@ -174,12 +142,6 @@ See [WEBHOOKS.md](../frameworks/WEBHOOKS.md) for webhook CRUD, delivery logs, an
 | GET | `/api/skills/[id]/executions` | Execution history |
 | GET | `/api/skills/executions/[execId]` | Single execution detail |
 
-### Config
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/skills/config` | Global skills config |
-| PATCH | `/api/skills/config` | Update config |
 | GET | `/api/skills/sources` | Available skill sources |
 
 See [SKILLS.md](../frameworks/SKILLS.md) for skill framework details.
@@ -212,40 +174,19 @@ See [AGENT-SKILLS.md](../frameworks/AGENT-SKILLS.md).
 | GET | `/api/memory/[id]` | Get memory |
 | PATCH | `/api/memory/[id]` | Update memory |
 | DELETE | `/api/memory/[id]` | Delete memory |
-| GET | `/api/memory/search` | Search memories |
-| GET | `/api/memory/retrieve` | Retrieve (with scoring) |
-| POST | `/api/memory/summarize` | Trigger summarization |
-| GET | `/api/memory/settings` | Memory config |
-| PATCH | `/api/memory/settings` | Update config |
 
 See [MEMORY.md](../frameworks/MEMORY.md).
 
 ---
-
-## Cache Routes (`/api/cache/*`)
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/cache/stats` | Hit/miss/eviction by namespace |
-| POST | `/api/cache/flush` | Flush all namespaces |
-| POST | `/api/cache/flush/[namespace]` | Flush specific namespace |
-| POST | `/api/cache/invalidate` | Invalidate by key pattern |
-| GET | `/api/cache/keys` | List keys (with pattern) |
-
 ---
 
 ## Plugins Routes (`/api/plugins/*`)
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/plugins` | List installed plugins |
-| POST | `/api/plugins/install` | Install from local path or URL |
 | DELETE | `/api/plugins/[id]` | Uninstall |
 | POST | `/api/plugins/[id]/enable` | Enable |
 | POST | `/api/plugins/[id]/disable` | Disable |
-| POST | `/api/plugins/[id]/reload` | Hot reload (dev mode) |
-| GET | `/api/plugins/[id]/config` | Plugin config |
-| PATCH | `/api/plugins/[id]/config` | Update config |
 | POST | `/api/plugins/[id]/test` | Test plugin (dry run) |
 | GET | `/api/plugins/marketplace` | Browse marketplace |
 | GET | `/api/plugins/marketplace/search` | Search marketplace |
@@ -256,11 +197,6 @@ See [PLUGIN_SDK.md](../plugins/PLUGIN_SDK.md) and [PLUGIN_DEVELOPMENT.md](../plu
 
 ---
 ## ACP Routes (`/api/acp/*`)
-
-Only **one agent management endpoint** exists:
-
-| Method | Path | Description |
-|--------|------|-------------|
 | GET | `/api/acp/agents` | List available CLI agents + their installation status |
 | POST | `/api/acp/agents` | Register a custom ACP agent |
 | GET | `/api/acp/agents/[id]` | Get agent configuration |
@@ -398,14 +334,6 @@ See [MCP-SERVER.md](../frameworks/MCP-SERVER.md) — 3 transports, 30+ tools, 13
 
 ## Usage Routes
 
-See [USAGE_QUOTA_GUIDE.md](../features/USAGE_QUOTA_GUIDE.md).
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/usage` | List usage records |
-| GET | `/api/usage/analytics` | Aggregated stats |
-| GET | `/api/usage/export` | Export to CSV/JSON |
-| GET | `/api/usage/top-keys` | Top consumers |
 
 ---
 
