@@ -9,8 +9,8 @@ lastUpdated: 2026-06-08
 > **TL;DR**: OmniRoute tracks every request's token usage, computes cost, enforces per-API-key quota, and surfaces analytics in the dashboard. This guide explains how it all works.
 
 **Sources:**
-- `open-sse/services/usage.ts` (101KB) — main usage tracking
-- `src/lib/usageAnalytics.ts` (12KB) — aggregation for dashboard
+- `open-sse/services/usage.ts` (~70KB) — main usage tracking
+- `src/lib/usageAnalytics.ts` (~10KB) — aggregation for dashboard
 - `src/lib/db/quotaSnapshots.ts` — historical quota data
 - `src/lib/db/usage*.ts` — multiple usage-related DB modules
 
@@ -321,25 +321,16 @@ Usage data grows ~1-10KB per request. At scale, this can be significant.
 
 ### Retention Settings
 
-```bash
-# Default: 90 days
-USAGE_RETENTION_DAYS=90
+Usage history retention is configured via the Database Settings in the UI or via `/api/settings/database`.
 
-# Aggressive: 30 days
-USAGE_RETENTION_DAYS=30
-
-# Unlimited (not recommended)
-USAGE_RETENTION_DAYS=0
-```
+By default, usage history is retained for **90 days**.
 
 ### Cleanup
 
 Old records are cleaned up by `src/lib/db/cleanup.ts`:
 
-- Runs daily at 3am UTC (configurable via `USAGE_CLEANUP_CRON`)
-- Deletes records older than `USAGE_RETENTION_DAYS`
-- Also clears call log artifacts (`${DATA_DIR}/call_logs/`) older than 30 days
-
+- Triggered by the background cron process
+- Deletes records from `usage_history` older than the configured `usageHistory` retention setting
 ### Storage Estimation
 
 | Request rate | 30-day storage | 90-day storage |
@@ -351,8 +342,7 @@ Old records are cleaned up by `src/lib/db/cleanup.ts`:
 
 For very high traffic, consider:
 
-- Reducing `USAGE_RETENTION_DAYS`
-- Disabling detailed request payloads (`CALL_LOG_PIPELINE_CAPTURE=false`)
+- Reducing the retention period via Database Settings
 - Using `aggregated_metrics` instead of raw records (only for analytics)
 
 ---
