@@ -6,7 +6,7 @@ lastUpdated: 2026-06-08
 
 # Monitoring & Observability Guide
 
-> **TL;DR**: OmniRoute ships with built-in health monitoring, provider autopi lots, quota tracking, and observability hooks. This guide covers the dashboard, alerts, and troubleshooting.
+> **TL;DR**: OmniRoute ships with built-in health monitoring, provider autopilot, quota tracking, and observability hooks. This guide covers the dashboard, alerts, and troubleshooting.
 
 **Sources:**
 - `src/lib/monitoring/observability.ts` — observability snapshot
