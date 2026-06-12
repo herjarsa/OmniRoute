@@ -627,9 +627,9 @@ The `extraction.ts` module (`src/lib/memory/extraction.ts`) uses **regex pattern
 
 | Category | Example pattern | Captures |
 |----------|-----------------|----------|
-| PREFERENCE_PATTERNS | `"I prefer <X>"`, `"I like <X>"`, `"I hate <X>"` | User preferences |
-| DECISION_PATTERNS | `"I'll use <X>"`, `"I decided to <X>"`, `"I went with <X>"` | User decisions (episodic) |
-| PATTERN_PATTERNS | `"I usually <X>"`, `"I always <X>"`, `"I never <X>"` | Persistent behavioral patterns |
+| PREFERENCE_PATTERNS | `"I prefer <X>"`, `"I like <X>"`, `"I hate <X>"`, `"my favorite|favourite is|are"`, `"don't like"`, `"enjoy"`, `"love"` | User preferences (7 patterns) |
+| DECISION_PATTERNS | `"I'll use <X>"`, `"I decided to <X>"`, `"I went with <X>"`, `"chose"`, `"going to use|with|adopt"`, `"selected"`, `"picked"` | User decisions — episodic (7 patterns) |
+| PATTERN_PATTERNS | `"I usually <X>"`, `"I always <X>"`, `"I never <X>"`, `"typically"`, `"tend to"`, `"often|frequently|regularly"` | Persistent behavioral patterns (6 patterns) |
 
 ### Example Patterns (Simplified)
 ```ts
@@ -637,15 +637,28 @@ The `extraction.ts` module (`src/lib/memory/extraction.ts`) uses **regex pattern
 const PREFERENCE_PATTERNS = [
   /\bI\s+(?:really\s+)?prefer\s+([^.,\n]+)/gi,
   /\bI\s+(?:really\s+)?like\s+([^.,\n]+)/gi,
-  /\bI\s+(?:hate|dislike|avoid)\s+([^.,\n]+)/gi
+  /\bI\s+(?:hate|dislike|avoid)\s+([^.,\n]+)/gi,
+  /(?:my\s+)?favo(u)?rite\s+(?:is|are)\s+([^.,\n]+)/gi,
+  /\b(?:i\s+)?don'?t\s+like\s+([^.,\n]+)/gi,
+  /\b(?:i\s+)?(?:really\s+)?enjoy\s+([^.,\n]+)/gi,
+  /\b(?:i\s+)?(?:really\s+)?love\s+([^.,\n]+)/gi
 ];
 const DECISION_PATTERNS = [
   /\bI'?(?:ll|will)\s+use\s+([^.,\n]+)/gi,
-  /\bI\s+(?:have\s+)?decided\s+(?:to\s+)?([^.,\n]+)/gi
+  /\bI\s+(?:have\s+)?decided\s+(?:to\s+)?([^.,\n]+)/gi,
+  /\b(?:i\s+)?chose\s+([^.,\n]+)/gi,
+  /\b(?:i'm|i\s+am)\s+going\s+to\s+(?:use|with|adopt)\s+([^.,\n]+)/gi,
+  /\b(?:i\s+)?selected\s+([^.,\n]+)/gi,
+  /\b(?:i\s+)?picked\s+([^.,\n]+)/gi,
+  /\b(?:i\s+)?went\s+with\s+([^.,\n]+)/gi
 ];
 const PATTERN_PATTERNS = [
   /\bI\s+usually\s+([^.,\n]+)/gi,
-  /\bI\s+always\s+([^.,\n]+)/gi
+  /\bI\s+always\s+([^.,\n]+)/gi,
+  /\bI\s+never\s+([^.,\n]+)/gi,
+  /\b(?:i\s+)?typically\s+([^.,\n]+)/gi,
+  /\b(?:i\s+)?tend\s+to\s+([^.,\n]+)/gi,
+  /\b(?:i\s+)?often|frequently|regularly\s+([^.,\n]+)/gi
 ];
 ```
 

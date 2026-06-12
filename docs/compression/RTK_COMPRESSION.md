@@ -467,7 +467,7 @@ To load filters programmatically:
 ```ts
 import { loadRtkFilters } from "omniroute/compression/engines/rtk/filterLoader";
 
-const filters = loadRtkFilters({ includeUserFilters: true });
+const filters = loadRtkFilters({ customFiltersEnabled: true });
 ```
 
 ### Validation
