@@ -156,7 +156,13 @@ function registerPluginInOpenCodeConfig({
   let cfg = {};
   if (existsSync(configPath)) {
     try {
-      cfg = JSON.parse(readFileSync(configPath, "utf8"));
+      const parsed = JSON.parse(readFileSync(configPath, "utf8"));
+      // Defensive: opencode.json may be a non-object (e.g. [] or null)
+      // from user edits or other tools. Reset to empty so the write
+      // below produces valid JSON.
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        cfg = parsed;
+      }
     } catch (err) {
       throw new Error(
         `Failed to parse existing ${configPath}: ${err.message}\n` +
@@ -164,7 +170,6 @@ function registerPluginInOpenCodeConfig({
       );
     }
   }
-
   const plugins = Array.isArray(cfg.plugin) ? cfg.plugin : [];
 
   // Plugin entries can be either a string ("@some/pkg") or a tuple
@@ -185,16 +190,23 @@ function registerPluginInOpenCodeConfig({
   // package is the obsolete predecessor of @omniroute/opencode-plugin
   // and was the root cause of issue #3711.
   const filtered = plugins.filter((p) => {
-    if (typeof p === "string") {
-      return !p.includes("opencode-omniroute-auth");
-    }
-    if (Array.isArray(p) && p[1] && typeof p[1] === "object") {
-      const pid = p[1].providerId;
-      if (pid === providerId) return false;
-      // Also drop the legacy auth plugin if it's there.
-      if (typeof p[0] === "string" && p[0].includes("opencode-omniroute-auth")) {
+    if (Array.isArray(p)) {
+      const pluginPath = p[0];
+      // Drop legacy `opencode-omniroute-auth` entries regardless of
+      // whether they carry options (some old installs registered them
+      // as bare tuples without a second element).
+      if (typeof pluginPath === "string" && pluginPath.includes("opencode-omniroute-auth")) {
         return false;
       }
+      // Drop any entry whose providerId matches the provider we are
+      // registering — idempotent re-run support.
+      if (p[1] && typeof p[1] === "object") {
+        const pid = p[1].providerId;
+        if (pid === providerId) return false;
+      }
+    } else if (typeof p === "string") {
+      // Bare string entry — drop it if it references the legacy auth package.
+      if (p.includes("opencode-omniroute-auth")) return false;
     }
     return true;
   });
@@ -219,8 +231,7 @@ function runOpenCodeAuth(providerId) {
   const isWin = process.platform === "win32";
   const opencodeBin = isWin ? "opencode.cmd" : "opencode";
   const res = spawnSync(opencodeBin, ["auth", "login", "--provider", providerId], {
-    stdio: "inherit",
-    shell: false,
+    shell: isWin,
   });
   if (res.error) {
     // ENOENT = opencode is not on PATH

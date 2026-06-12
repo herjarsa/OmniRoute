@@ -267,41 +267,32 @@ if (existsSync(cliSrcFile)) {
 }
 
 // ── Step 8.8: Build @omniroute/opencode-plugin ──────────────
-// The plugin ships bundled inside the omniroute npm package (see root
-// package.json "files": ["@omniroute/", ...]). Its built `dist/` MUST be
-// present in the publish tarball so `omniroute setup opencode` can copy it
-// into the user's OpenCode plugin dir. If the build fails we surface the
-// error — shipping without the plugin's dist breaks the documented install
-// flow for every downstream user.
+// Always rebuild the plugin during publish so the tarball ships a fresh
+// dist/. Stale artifacts from a previous iteration would break the install
+// flow for every user running `omniroute setup opencode`. The root
+// package.json `files` list already includes `@omniroute/` — the built
+// files are picked up automatically by npm pack.
 const opencodePluginSrc = join(ROOT, "@omniroute", "opencode-plugin");
-const opencodePluginDist = join(opencodePluginSrc, "dist", "index.js");
-const opencodePluginCjs = join(opencodePluginSrc, "dist", "index.cjs");
 if (existsSync(opencodePluginSrc) && existsSync(join(opencodePluginSrc, "package.json"))) {
-  const pluginAlreadyBuilt = existsSync(opencodePluginDist) && existsSync(opencodePluginCjs);
-  if (!pluginAlreadyBuilt) {
-    console.log("\n  🔨 Building @omniroute/opencode-plugin (tsup)...");
-    try {
-      execFileSync(NPX_BIN, ["tsup"], {
-        cwd: opencodePluginSrc,
-        stdio: "inherit",
-        env: { ...process.env, NODE_ENV: "production" },
-      });
-      console.log("  ✅ @omniroute/opencode-plugin bundled to @omniroute/opencode-plugin/dist/");
-    } catch (err: any) {
-      console.error("  ❌ Failed to build @omniroute/opencode-plugin:", err.message);
-      console.error("     The published package would be missing the plugin dist.");
-      console.error(
-        "     Run `cd @omniroute/opencode-plugin && npm install && npm run build` to debug."
-      );
-      process.exit(1);
-    }
-  } else {
-    console.log("  ✅ @omniroute/opencode-plugin dist/ already present (skipping rebuild)");
+  console.log("\n  🔨 Building @omniroute/opencode-plugin (tsup)...");
+  try {
+    execFileSync(NPX_BIN, ["tsup"], {
+      cwd: opencodePluginSrc,
+      stdio: "inherit",
+      env: { ...process.env, NODE_ENV: "production" },
+    });
+    console.log("  ✅ @omniroute/opencode-plugin bundled to @omniroute/opencode-plugin/dist/");
+  } catch (err: any) {
+    console.error("  ❌ Failed to build @omniroute/opencode-plugin:", err.message);
+    console.error("     The published package would be missing the plugin dist.");
+    console.error(
+      "     Run `cd @omniroute/opencode-plugin && npm install && npm run build` to debug."
+    );
+    process.exit(1);
   }
 } else {
   console.log("  ⏭️  @omniroute/opencode-plugin not found in workspace (skipping build)");
 }
-
 // ── Step 9: Copy shared utilities needed at runtime ────────
 const sharedApiKey = join(ROOT, "src", "shared", "utils", "apiKey.js");
 const sharedApiKeyDest = join(DIST_DIR, "src", "shared", "utils");
