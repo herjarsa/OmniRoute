@@ -4,7 +4,6 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const ORIGINAL_HOME = process.env.HOME;
 const ORIGINAL_XDG_CONFIG_HOME = process.env.XDG_CONFIG_HOME;
 
 function createTempDir() {
@@ -22,7 +21,13 @@ async function withSandbox(fn: (sandbox: string, homeDir: string) => Promise<voi
   const fakeHome = path.join(sandbox, "fake-home");
   fs.mkdirSync(fakeHome, { recursive: true });
   const oldHome = process.env.HOME;
+  // On Windows, os.homedir() uses USERPROFILE instead of HOME. Override it
+  // too so tests don't read/write the developer's real config.
+  const oldUserProfile = process.env.USERPROFILE;
   process.env.HOME = fakeHome;
+  if (process.platform === "win32") {
+    process.env.USERPROFILE = fakeHome;
+  }
   // Ensure XDG_CONFIG_HOME is not set so resolveOpenCodeDirs uses HOME
   delete process.env.XDG_CONFIG_HOME;
 
@@ -30,6 +35,11 @@ async function withSandbox(fn: (sandbox: string, homeDir: string) => Promise<voi
     await fn(sandbox, fakeHome);
   } finally {
     process.env.HOME = oldHome;
+    if (oldUserProfile === undefined) {
+      delete process.env.USERPROFILE;
+    } else {
+      process.env.USERPROFILE = oldUserProfile;
+    }
     if (ORIGINAL_XDG_CONFIG_HOME === undefined) {
       delete process.env.XDG_CONFIG_HOME;
     } else {

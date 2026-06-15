@@ -86,7 +86,7 @@ function resolveOpenCodeDirs() {
  *     a clear error instead of running tsup here, because the CLI runtime
  *     may not have tsup available (it's a devDependency).
  *
- * @returns {{ distEntry: string, cjsEntry: string, packageDir: string }}
+ * @returns {{ distEntry: string, packageDir: string }}
  */
 function resolveBundledPlugin() {
   if (!existsSync(BUNDLED_PLUGIN_DIR)) {
@@ -99,9 +99,7 @@ function resolveBundledPlugin() {
   }
 
   const esmEntry = join(BUNDLED_PLUGIN_DIR, "dist", "index.js");
-  const cjsEntry = join(BUNDLED_PLUGIN_DIR, "dist", "index.cjs");
-
-  if (!existsSync(esmEntry) || !existsSync(cjsEntry)) {
+  if (!existsSync(esmEntry)) {
     throw new Error(
       `@omniroute/opencode-plugin dist/ not built (looked for ${esmEntry}).\n` +
         `Run \`cd ${BUNDLED_PLUGIN_DIR} && npm install && npm run build\` and re-run this command.`
@@ -109,7 +107,9 @@ function resolveBundledPlugin() {
   }
 
   // Prefer ESM. OpenCode (≥1.15) loads ESM modules natively.
-  return { distEntry: esmEntry, cjsEntry, packageDir: BUNDLED_PLUGIN_DIR };
+  // ESM-only build (CJS was dropped in tsup config). OpenCode (>=1.15) loads
+  // ESM modules natively.
+  return { distEntry: esmEntry, packageDir: BUNDLED_PLUGIN_DIR };
 }
 
 /**
@@ -147,7 +147,7 @@ function installPluginToOpenCode(pluginInfo, opencodeConfigDir) {
  */
 function registerPluginInOpenCodeConfig({
   opencodeConfigDir,
-  pluginTargetDir,
+
   providerId,
   baseURL,
   displayName,
@@ -266,6 +266,31 @@ export async function runSetupOpenCodeCommand(opts = {}) {
   const wantsAuth = Boolean(opts.auth);
   const nonInteractive = Boolean(opts.nonInteractive);
 
+  // Validate providerId: only safe characters allowed. Prevents command
+  // injection on Windows where shell=true spawns args, and directory
+  // traversal in any path that uses providerId.
+  if (!/^[a-zA-Z0-9_-]+$/.test(providerId)) {
+    throw new Error(
+      `Invalid providerId: ${JSON.stringify(providerId)}. ` +
+        `Only letters, digits, underscores, and dashes are allowed.`
+    );
+  }
+
+  // Validate baseURL: must be a well-formed http/https URL.
+  let parsedBaseURL;
+  try {
+    parsedBaseURL = new URL(baseURL);
+  } catch {
+    throw new Error(
+      `Invalid baseURL: ${JSON.stringify(baseURL)}. Must be a well-formed http/https URL.`
+    );
+  }
+  if (parsedBaseURL.protocol !== "http:" && parsedBaseURL.protocol !== "https:") {
+    throw new Error(
+      `Invalid baseURL protocol: ${parsedBaseURL.protocol}. Only http and https are allowed.`
+    );
+  }
+
   printHeading("OmniRoute → OpenCode Plugin Setup");
 
   const { configDir: opencodeConfigDir, dataDir: opencodeDataDir } = resolveOpenCodeDirs();
@@ -305,7 +330,7 @@ export async function runSetupOpenCodeCommand(opts = {}) {
   try {
     const reg = registerPluginInOpenCodeConfig({
       opencodeConfigDir,
-      pluginTargetDir,
+
       providerId,
       baseURL,
       displayName,
