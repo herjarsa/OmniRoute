@@ -166,13 +166,9 @@ function getNoAuthCandidates(excludedProviders: Set<string>): VirtualAutoComboCa
 /**
  * Aggregate the context window / max output to ADVERTISE for an auto combo.
  *
- * MAX across candidates (not min): the auto-combo context pre-filter
- * (combo.ts::filterTargetsByRequestCompatibility + the estimated-tokens
- * pre-filter) already routes oversized requests away from small-window
- * candidates, so advertising the largest window lets clients (e.g. opencode)
- * keep their smart auto-compaction calibrated to the best candidate instead
- * of compacting prematurely — or, worse, receiving 0 and disabling
- * compaction entirely (the "agent keeps forgetting things" bug).
+ * MIN across candidates: the advertised context reflects the bottleneck
+ * (smallest window in the pool) so clients size requests correctly and
+ * never send oversized prompts that the weakest candidate cannot handle.
  *
  * Unknown candidates resolve through getTokenLimit()'s fallback chain, so a
  * non-empty pool always yields a positive contextLength.
@@ -190,14 +186,14 @@ export function computeAdvertisedLimits(candidates: Array<{ provider: string; mo
   for (const candidate of candidates) {
     const limit = getTokenLimit(candidate.provider, candidate.model);
     if (Number.isFinite(limit) && limit > 0) {
-      contextLength = contextLength === null ? limit : Math.max(contextLength, limit);
+      contextLength = contextLength === null ? limit : Math.min(contextLength, limit);
     }
     const output = getResolvedModelCapabilities({
       provider: candidate.provider,
       model: candidate.model,
     }).maxOutputTokens;
     if (typeof output === "number" && Number.isFinite(output) && output > 0) {
-      maxOutputTokens = maxOutputTokens === null ? output : Math.max(maxOutputTokens, output);
+      maxOutputTokens = maxOutputTokens === null ? output : Math.min(maxOutputTokens, output);
     }
   }
   return { contextLength, maxOutputTokens };
