@@ -988,18 +988,27 @@ export function mapComboToModelV2(
   // Combos span multiple providers. Use Anthropic format only when ALL
   // members resolve to Anthropic — otherwise fall back to OpenAI-compat
   // (lowest common denominator that every upstream understands).
+  //
+  // The api.id we emit here is the model name the AI SDK forwards in the
+  // request body. For combos the upstream OmniRoute /v1/chat/completions
+  // only accepts the combo under the `combo/<slug>` namespace (bare ids
+  // like `master-light` are rejected with `Unable to determine provider
+  // for model 'master-light'. Use a provider/model prefix or ensure the
+  // model is added as a combo entry`). We bake the namespace into
+  // `api.id` so the SDK sends the correct model parameter.
   const comboApiBlock = (() => {
     if (!hasMembers) return resolveApiBlock("", baseURL, apiFormat);
     const allAnthropic = members.every(
       (m) => resolveApiBlock(m.id, baseURL, apiFormat).id === "anthropic"
     );
-    return allAnthropic
+    const base = allAnthropic
       ? resolveApiBlock(members[0].id, baseURL, apiFormat)
       : {
           id: "openai-compatible",
           url: ensureV1Suffix(baseURL),
           npm: "@ai-sdk/openai-compatible",
         };
+    return { ...base, id: `combo/${combo.id}` };
   })();
 
   return {
@@ -2258,16 +2267,20 @@ export function slugifyComboName(name: string): string {
  * string (e.g. a combo named just punctuation).
  */
 export function buildComboKey(combo: OmniRouteRawCombo, used: Set<string>): string {
+  // Combos are bare model ids in the OmniRoute catalog (`MASTER`, `CODING`,
+  // `MASTER-LIGHT`, ...). The picker shows them under their `providerID`
+  // field — `omniroute` — so the displayed name is `omniroute/MASTER`.
+  // The picker key is the bare slug (no prefix) so OpenCode can look it
+  // up via `providerID + bare id`. The bare id is also what
+  // `/v1/chat/completions` expects in the request body.
   const friendlyName = combo.name && combo.name.trim().length > 0 ? combo.name.trim() : combo.id;
   let slug = slugifyComboName(friendlyName);
   if (slug.length === 0) slug = combo.id;
-  let key = `combo/${slug}`;
+  let key = slug;
   if (used.has(key)) {
     const tail = combo.id.split("-")[0] ?? combo.id;
-    key = `combo/${slug}-${tail}`;
-    // Defensive: in the (impossible) event the disambiguated key also
-    // collides, append the full id.
-    if (used.has(key)) key = `combo/${slug}-${combo.id}`;
+    key = `${slug}-${tail}`;
+    if (used.has(key)) key = `${slug}-${combo.id}`;
   }
   used.add(key);
   return key;
